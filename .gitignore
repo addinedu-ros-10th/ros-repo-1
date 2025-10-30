@@ -205,3 +205,50 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ---- ROS2 ----
+install/
+build/
+log/
+*.bag
+*.world
+*.launch.pyc
+
+# ---- Arduino / C++ ----
+*.hex
+*.bin
+*.elf
+*.o
+*.d
+*.obj
+*.cpp.o
+*.ino.cpp
+
+# ---- Flutter / Dart ----
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+build/
+android/.gradle/
+android/.idea/
+ios/.symlinks/
+ios/Pods/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+web/wasm/
+.melos_tool/
+
+# ---- Node / Web ----
+node_modules/
+npm-debug.log
+yarn-error.log
+dist/
+package-lock.json
+
+# ---- Docker / Logs ----
+docker-compose.override.yml
+.env.local
+.env.dev
+.env.prod

@@ -1,0 +1,32 @@
+# ==============================================
+# 📝 Git Commit Message Template
+# ==============================================
+
+# [Type] [Category/Project]: [Summary]
+# ----------------------------------------------
+# Type: feat | fix | refactor | chore | docs | test | style | perf | ci
+# Category: IOT | SERVER | AI | DEEP_LEARNING | APP
+# Project: app-server | ros2-server | mcp-server | deep-learning-server | web-app 등
+# Summary: 간결하게 현재 변경 요약 (50자 이내)
+
+# 예시:
+# feat/SERVER/app-server: OAuth2 로그인 API 추가
+# fix/AI/mcp-server: 잘못된 파라미터 검증 로직 수정
+# refactor/DEEP_LEARNING/deep-learning-server: 학습 루프 구조 개선
+
+# ----------------------------------------------
+# Description (필수)
+# 변경 이유와 상세 내용을 기술 (한글/영문 혼용 가능)
+
+# ----------------------------------------------
+# Ticket / Issue Reference (선택)
+# 예: PROJ-412, #55
+
+# ----------------------------------------------
+# Breaking Changes (선택)
+# 기존 호환성에 영향을 미치는 변경사항을 기술
+
+# ----------------------------------------------
+# Footer (자동 생성 가능)
+# Co-authored-by: <Name> <email>
+# Reviewed-by: <Reviewer> <email>
