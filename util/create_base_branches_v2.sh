@@ -91,12 +91,12 @@ for CATEGORY in "${!PROJECTS[@]}"; do
     git switch -c "$BRANCH"
 
     # remove all from index, then add only project path if present
-    git rm -r --cached . >/dev/null 2>&1 || true
-    if [ -e "$PROJECT_PATH" ]; then
-      git add -- "$PROJECT_PATH"
-    else
-      echo "Warning: path does not exist in repo: $PROJECT_PATH"
-    fi
+    # git rm -r --cached . >/dev/null 2>&1 || true
+    # if [ -e "$PROJECT_PATH" ]; then
+    #   git add -- "$PROJECT_PATH"
+    # else
+    #   echo "Warning: path does not exist in repo: $PROJECT_PATH"
+    # fi
 
     if git diff --cached --quiet; then
       git commit --allow-empty -m "Init $BRANCH: track only $PROJECT_PATH"
