@@ -20,6 +20,7 @@ from typing import Optional, AsyncGenerator, Literal
 from enum import Enum
 import tempfile
 import aiofiles
+import logging
 
 from .config import settings, get_cors_origins
 from .redis_session import redis_session_manager
@@ -31,6 +32,9 @@ from .database import (
     log_cost
 )
 import time
+
+# 로깅 설정
+logger = logging.getLogger(__name__)
 
 
 # FastAPI 앱 초기화
@@ -106,12 +110,17 @@ async def startup_event():
     try:
         db_manager.initialize()
         if db_manager.engine:
-            db_manager.create_tables()
-            print("✓ Database connected and tables created")
+            tables_created = db_manager.create_tables()
+            if tables_created:
+                print("✓ Database connected and all tables verified")
+            else:
+                print("⚠ Database connected but table creation had issues (check logs)")
         else:
             print("⚠ Database not configured (DB_URL or DB_HOST not set)")
     except Exception as e:
-        print(f"⚠ Database initialization failed: {e}")
+        logger.error(f"Database initialization failed: {e}", exc_info=True)
+        print(f"✗ Database initialization failed: {e}")
+        print("⚠ Server will continue but database features will be unavailable")
 
 
 # 애플리케이션 종료 시 정리
@@ -860,7 +869,8 @@ async def root():
     """서버 상태 확인"""
     # Redis 및 DB 상태 확인
     redis_status = await redis_session_manager.health_check()
-    db_status = db_manager.health_check() if db_manager._initialized else False
+    db_status = db_manager.health_check() if (hasattr(db_manager, '_initialized') and db_manager._initialized) else False
+    db_verification = db_manager.verify_tables() if (hasattr(db_manager, '_initialized') and db_manager._initialized) else {}
     
     # OpenAI 연결 상태 확인 (API 키 설정 여부 및 간단한 연결 테스트)
     openai_status = "configured"
@@ -882,9 +892,16 @@ async def root():
         "status": "running",
         "service": "Voice Interface API",
         "version": "1.0.0",
-        "health": {
+        "services": {
             "redis": "connected" if redis_status else "disconnected",
-            "database": "connected" if db_status else "not_configured",
+            "database": {
+                "connected": db_status,
+                "initialized": db_manager._initialized if hasattr(db_manager, '_initialized') else False,
+                "schema": db_verification.get('schema', None) if db_verification else None,
+                "database_name": db_verification.get('database', None) if db_verification else None,
+                "tables": db_verification.get('tables', {}) if db_verification else {},
+                "all_tables_exist": db_verification.get('all_tables_exist', False) if db_verification else False
+            },
             "openai": openai_status,
             "openai_detail": openai_detailed
         },
