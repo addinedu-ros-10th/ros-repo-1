@@ -9,13 +9,14 @@ OpenAI Whisper (STT) + ChatGPT + TTS 통합
 """
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, Query
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 import os
 import json
 import asyncio
+import base64
 from typing import Optional, AsyncGenerator, Literal
 from enum import Enum
 import tempfile
@@ -551,6 +552,10 @@ async def process_voice(
     model: Optional[ChatModel] = Query(
         default=None,
         description=f"ChatGPT 모델 선택. 옵션: {', '.join([m.value for m in ChatModel])}. None이면 기본값({settings.default_chat_model}) 사용"
+    ),
+    response_format: Optional[str] = Query(
+        default="json",
+        description="응답 형식: 'json' (텍스트+Base64 오디오) 또는 'audio' (오디오만)"
     )
 ):
     """
@@ -565,9 +570,13 @@ async def process_voice(
     **사용 가능한 옵션:**
     - **voice**: TTS 음성 선택 (alloy, echo, fable, onyx, nova, shimmer)
     - **model**: ChatGPT 모델 선택 (gpt-4o-mini, gpt-4o, gpt-4-turbo 등)
+    - **response_format**: 응답 형식 선택
+        - `json` (기본값): JSON 형식으로 텍스트와 Base64 인코딩된 오디오 반환
+        - `audio`: 오디오 파일만 반환 (MP3)
     
     **응답 형식:**
-    - `multipart/mixed`: 메타데이터(JSON) + 음성 파일(MP3)
+    - `json`: JSON 응답 (텍스트 + Base64 오디오) - 권장
+    - `audio`: 오디오 파일만 반환 (MP3)
     """
     try:
         # 기본값 설정
@@ -625,69 +634,49 @@ async def process_voice(
             input=assistant_text
         )
 
-        # 음성 데이터 스트리밍
-        async def generate():
-            # 먼저 메타데이터 전송 (텍스트 정보)
-            yield b"--boundary\r\n"
-            yield b"Content-Type: application/json\r\n\r\n"
-            yield json.dumps({
-                "user_text": user_text,
-                "assistant_text": assistant_text
-            }).encode()
-            yield b"\r\n--boundary\r\n"
-            yield b"Content-Type: audio/mpeg\r\n\r\n"
+        # ✅ 수정: OpenAI SDK의 올바른 응답 처리
+        # response.read()를 사용하여 전체 바이트 읽기
+        try:
+            # OpenAI SDK v1.0+: HttpxBinaryResponseContent.read()
+            audio_bytes = tts_response.read()
+        except Exception as e:
+            logger.error(f"Failed to read TTS response: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"TTS 응답 읽기 실패: {str(e)}"
+            )
+
+        # 응답 형식에 따라 처리
+        if response_format == "audio":
+            # 오디오만 반환
+            # HTTP 헤더는 latin-1 인코딩만 지원하므로 한글 텍스트는 제거하거나 URL 인코딩 필요
+            # 텍스트 정보가 필요하면 JSON 응답 형식 사용 권장
+            return StreamingResponse(
+                iter([audio_bytes]),  # bytes를 iterable로 변환
+                media_type="audio/mpeg",
+                headers={
+                    "Content-Disposition": "attachment; filename=response.mp3"
+                    # 참고: HTTP 헤더는 latin-1만 지원하므로 한글 텍스트는 헤더에 포함할 수 없음
+                    # 텍스트 정보가 필요하면 response_format=json 사용 권장
+                }
+            )
+        else:
+            # JSON 응답 (텍스트 + Base64 오디오) - 기본값
+            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
             
-            # 음성 데이터 전송
-            try:
-                # OpenAI SDK의 response 처리
-                # OpenAI SDK v1.0+ 에서는 response.content를 직접 사용 (권장)
-                if hasattr(tts_response, 'content'):
-                    content = tts_response.content
-                    if isinstance(content, bytes):
-                        # bytes를 청크로 나누어 스트리밍
-                        chunk_size = 1024
-                        for i in range(0, len(content), chunk_size):
-                            yield content[i:i + chunk_size]
-                    else:
-                        # content가 다른 타입이면 bytes로 변환
-                        try:
-                            content_bytes = bytes(content) if content else b''
-                            chunk_size = 1024
-                            for i in range(0, len(content_bytes), chunk_size):
-                                yield content_bytes[i:i + chunk_size]
-                        except Exception:
-                            yield bytes(content) if content else b''
-                # response가 직접 bytes인 경우 (드물지만 가능)
-                elif isinstance(tts_response, bytes):
-                    chunk_size = 1024
-                    for i in range(0, len(tts_response), chunk_size):
-                        yield tts_response[i:i + chunk_size]
-                else:
-                    # 기타: 지원하지 않는 타입
-                    raise ValueError(f"Unsupported response type: {type(tts_response)}. Expected response with 'content' attribute or bytes.")
-            except Exception as e:
-                print(f"TTS streaming error in voice/process: {e}, response type: {type(tts_response)}")
-                if hasattr(tts_response, '__dict__'):
-                    print(f"Response attributes: {dir(tts_response)}")
-                # 대체 방법: content만 사용
-                if hasattr(tts_response, 'content'):
-                    content = tts_response.content
-                    if isinstance(content, bytes):
-                        chunk_size = 1024
-                        for i in range(0, len(content), chunk_size):
-                            yield content[i:i + chunk_size]
-                    else:
-                        yield bytes(content) if content else b''
-                else:
-                    raise
-            yield b"\r\n--boundary--\r\n"
+            return JSONResponse(content={
+                "success": True,
+                "user_text": user_text,
+                "assistant_text": assistant_text,
+                "audio_base64": audio_base64,
+                "audio_format": "mp3",
+                "session_id": session_id
+            })
 
-        return StreamingResponse(
-            generate(),
-            media_type="multipart/mixed; boundary=boundary"
-        )
-
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Voice process error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"음성 처리 실패: {str(e)}")
 
 
