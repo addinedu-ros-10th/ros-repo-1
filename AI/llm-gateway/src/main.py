@@ -11,6 +11,7 @@ OpenAI Whisper (STT) + ChatGPT + TTS 통합
 from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 import os
@@ -88,6 +89,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 정적 파일 서빙 (테스트 페이지 등)
+# 프로젝트 루트 경로 확인 (Docker 컨테이너 내부: /app)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TESTS_DIR = os.path.join(BASE_DIR, "tests", "user_testing")
+
+# Docker 컨테이너 내부 경로도 확인
+DOCKER_TESTS_DIR = "/app/tests/user_testing"
+
+if os.path.exists(TESTS_DIR):
+    app.mount("/tests", StaticFiles(directory=TESTS_DIR, html=True), name="tests")
+    logger.info(f"Static files mounted at /tests from {TESTS_DIR}")
+elif os.path.exists(DOCKER_TESTS_DIR):
+    app.mount("/tests", StaticFiles(directory=DOCKER_TESTS_DIR, html=True), name="tests")
+    logger.info(f"Static files mounted at /tests from {DOCKER_TESTS_DIR}")
+else:
+    logger.warning(f"Tests directory not found at {TESTS_DIR} or {DOCKER_TESTS_DIR}")
 
 
 # OpenAI 클라이언트 초기화

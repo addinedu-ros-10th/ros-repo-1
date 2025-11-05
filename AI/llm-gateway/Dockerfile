@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 소스 코드 복사
 COPY src/ ./src/
+# 테스트 파일 복사 (정적 파일 서빙용)
+COPY tests/ ./tests/
 # 설정 파일 복사
 COPY docker-compose.yml .env.example .dockerignore ./
 
