@@ -51,7 +51,9 @@ app.add_middleware(
 
 
 # OpenAI 클라이언트 초기화
-client = AsyncOpenAI(api_key=settings.openai_api_key)
+# API 키가 설정되지 않은 경우 환경변수 OPENAI_API_KEY를 자동으로 사용
+# 또는 None을 전달하면 AsyncOpenAI가 환경변수를 자동으로 확인
+client = AsyncOpenAI(api_key=settings.openai_api_key or os.getenv("OPENAI_API_KEY"))
 
 
 # 애플리케이션 시작 시 초기화
@@ -310,6 +312,7 @@ async def streaming_chat(request: TextChatRequest):
 
 @app.post("/api/tts", summary="텍스트를 음성으로 변환 (Text-to-Speech)")
 async def text_to_speech(request: TTSRequest):
+    print(f"TTS text_to_speech is started!!")
     """
     텍스트를 음성 파일로 변환합니다.
     OpenAI TTS API 사용 (한국어 지원)
@@ -328,39 +331,41 @@ async def text_to_speech(request: TTSRequest):
 
         # 음성 데이터를 스트리밍으로 반환
         async def generate():
-            # OpenAI SDK의 response는 bytes를 직접 반환하거나 iterable할 수 있음
-            # response.content를 사용하거나 직접 반복
+            # OpenAI SDK v1.0+ 에서는 response.content를 직접 사용 (권장)
+            # response.content는 bytes를 반환하므로 직접 사용 가능
             try:
-                # OpenAI SDK v1.0+ 에서는 response.content를 사용
+                # OpenAI SDK의 audio.speech.create()는 response.content에 bytes를 반환
                 if hasattr(response, 'content'):
-                    # content 속성이 있는 경우 (전체 바이트)
                     content = response.content
+                    # content가 bytes인지 확인
                     if isinstance(content, bytes):
+                        # bytes를 청크로 나누어 스트리밍
                         chunk_size = 1024
                         for i in range(0, len(content), chunk_size):
                             yield content[i:i + chunk_size]
                     else:
-                        # content가 다른 타입인 경우
-                        yield bytes(content) if content else b''
-                elif hasattr(response, 'iter_bytes'):
-                    # iter_bytes는 일반 generator (비동기 아님)
-                    for chunk in response.iter_bytes(chunk_size=1024):
-                        yield chunk
+                        # content가 다른 타입이면 bytes로 변환 시도
+                        try:
+                            content_bytes = bytes(content) if content else b''
+                            chunk_size = 1024
+                            for i in range(0, len(content_bytes), chunk_size):
+                                yield content_bytes[i:i + chunk_size]
+                        except Exception:
+                            yield bytes(content) if content else b''
+                # response가 직접 bytes인 경우 (드물지만 가능)
                 elif isinstance(response, bytes):
-                    # response 자체가 bytes인 경우
                     chunk_size = 1024
                     for i in range(0, len(response), chunk_size):
                         yield response[i:i + chunk_size]
                 else:
                     # 기타: response를 bytes로 변환 시도
-                    content = bytes(response) if response else b''
-                    chunk_size = 1024
-                    for i in range(0, len(content), chunk_size):
-                        yield content[i:i + chunk_size]
+                    raise ValueError(f"Unsupported response type: {type(response)}. Expected response with 'content' attribute or bytes.")
             except Exception as e:
                 # 에러 발생 시 상세 정보 포함
                 print(f"TTS streaming error: {e}, response type: {type(response)}")
-                raise ValueError(f"TTS 처리 실패: {str(e)}")
+                if hasattr(response, '__dict__'):
+                    print(f"Response attributes: {dir(response)}")
+                raise HTTPException(status_code=500, detail=f"TTS 처리 실패: {str(e)}")
 
         return StreamingResponse(
             generate(),
@@ -459,33 +464,36 @@ async def process_voice(
             # 음성 데이터 전송
             try:
                 # OpenAI SDK의 response 처리
+                # OpenAI SDK v1.0+ 에서는 response.content를 직접 사용 (권장)
                 if hasattr(tts_response, 'content'):
-                    # content 속성이 있는 경우 (권장)
                     content = tts_response.content
                     if isinstance(content, bytes):
+                        # bytes를 청크로 나누어 스트리밍
                         chunk_size = 1024
                         for i in range(0, len(content), chunk_size):
                             yield content[i:i + chunk_size]
                     else:
-                        yield bytes(content) if content else b''
-                elif hasattr(tts_response, 'iter_bytes'):
-                    # iter_bytes는 일반 generator (비동기 아님)
-                    for chunk in tts_response.iter_bytes(chunk_size=1024):
-                        yield chunk
+                        # content가 다른 타입이면 bytes로 변환
+                        try:
+                            content_bytes = bytes(content) if content else b''
+                            chunk_size = 1024
+                            for i in range(0, len(content_bytes), chunk_size):
+                                yield content_bytes[i:i + chunk_size]
+                        except Exception:
+                            yield bytes(content) if content else b''
+                # response가 직접 bytes인 경우 (드물지만 가능)
                 elif isinstance(tts_response, bytes):
-                    # response 자체가 bytes인 경우
                     chunk_size = 1024
                     for i in range(0, len(tts_response), chunk_size):
                         yield tts_response[i:i + chunk_size]
                 else:
-                    # 기타: bytes로 변환 시도
-                    content = bytes(tts_response) if tts_response else b''
-                    chunk_size = 1024
-                    for i in range(0, len(content), chunk_size):
-                        yield content[i:i + chunk_size]
+                    # 기타: 지원하지 않는 타입
+                    raise ValueError(f"Unsupported response type: {type(tts_response)}. Expected response with 'content' attribute or bytes.")
             except Exception as e:
                 print(f"TTS streaming error in voice/process: {e}, response type: {type(tts_response)}")
-                # 대체 방법
+                if hasattr(tts_response, '__dict__'):
+                    print(f"Response attributes: {dir(tts_response)}")
+                # 대체 방법: content만 사용
                 if hasattr(tts_response, 'content'):
                     content = tts_response.content
                     if isinstance(content, bytes):
