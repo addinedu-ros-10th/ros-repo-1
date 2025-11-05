@@ -15,7 +15,6 @@ ENV/
 htmlcov/
 *.cover
 .hypothesis/
-tests/
 
 # IDE
 .vscode/
@@ -38,24 +37,15 @@ build/
 dist/
 *.egg-info/
 
-# 문서 (Docker 이미지에는 불필요)
-docs/
-*.md
-!README.md
-
-# Git
-.git/
-.gitignore
+# Docker
+.dockerignore
 
 # OS
 .DS_Store
 Thumbs.db
 
-# 스크립트 (운영 환경에서는 불필요)
-scripts/
-Makefile
-
 # 프로젝트별
 *.md.bak
 temp/
 tmp/
+

@@ -8,21 +8,22 @@ OpenAI Whisper (STT) + ChatGPT + TTS 통합
 - config.py에서 환경변수 관리
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from openai import AsyncOpenAI
 import os
 import json
 import asyncio
-from typing import Optional, AsyncGenerator
+from typing import Optional, AsyncGenerator, Literal
+from enum import Enum
 import tempfile
 import aiofiles
 
-from config import settings, get_cors_origins
-from redis_session import redis_session_manager
-from database import (
+from .config import settings, get_cors_origins
+from .redis_session import redis_session_manager
+from .database import (
     db_manager, 
     save_conversation_to_db, 
     load_conversation_from_db,
@@ -35,7 +36,41 @@ import time
 # FastAPI 앱 초기화
 app = FastAPI(
     title="Voice Interface API",
-    description="한국어 음성 인터페이스를 위한 STT, ChatGPT, TTS 통합 API",
+    description="""
+    한국어 음성 인터페이스를 위한 STT, ChatGPT, TTS 통합 API
+    
+    ## 주요 기능
+    
+    - 🎤 **STT (Speech-to-Text)**: OpenAI Whisper로 음성을 텍스트로 변환
+    - 💬 **ChatGPT**: 자연어 대화 처리 (다양한 모델 지원)
+    - 🔊 **TTS (Text-to-Speech)**: 텍스트를 음성으로 변환 (6가지 음성 옵션)
+    - 🔄 **통합 처리**: STT → Chat → TTS 원스톱 처리
+    - 📡 **WebSocket**: 실시간 양방향 통신
+    
+    ## 사용 가능한 옵션
+    
+    ### ChatGPT 모델
+    - `gpt-4o-mini`: 빠르고 저렴 (기본값)
+    - `gpt-4o`: 최신 고성능
+    - `gpt-4-turbo`: 고성능
+    - `gpt-4`: 표준 GPT-4
+    - `gpt-3.5-turbo`: 빠른 응답
+    
+    ### TTS 음성
+    - `alloy`: 중성적이고 균형잡힌 음성 (기본값)
+    - `echo`: 깊고 따뜻한 음성
+    - `fable`: 밝고 활기찬 음성
+    - `onyx`: 깊고 강렬한 음성
+    - `nova`: 부드럽고 친근한 음성
+    - `shimmer`: 부드럽고 우아한 음성
+    
+    ### TTS 모델
+    - `tts-1`: 표준 모델, 빠른 응답 (기본값)
+    - `tts-1-hd`: 고품질 모델, 더 자연스러운 음성
+    
+    ### STT 모델
+    - `whisper-1`: OpenAI Whisper (기본값, 유일한 옵션)
+    """,
     version="1.0.0"
 )
 
@@ -91,20 +126,84 @@ async def shutdown_event():
 fallback_store = {}
 
 
+# ============= API 옵션 Enum =============
+
+class ChatModel(str, Enum):
+    """ChatGPT 모델 옵션"""
+    GPT_4O_MINI = "gpt-4o-mini"  # 빠르고 저렴한 모델 (기본값)
+    GPT_4O = "gpt-4o"  # 최신 고성능 모델
+    GPT_4_TURBO = "gpt-4-turbo"  # 고성능 모델
+    GPT_4 = "gpt-4"  # 표준 GPT-4 모델
+    GPT_3_5_TURBO = "gpt-3.5-turbo"  # 빠른 응답 모델
+
+
+class TTSVoice(str, Enum):
+    """TTS 음성 옵션"""
+    ALLOY = "alloy"  # 중성적이고 균형잡힌 음성 (기본값)
+    ECHO = "echo"  # 깊고 따뜻한 음성
+    FABLE = "fable"  # 밝고 활기찬 음성
+    ONYX = "onyx"  # 깊고 강렬한 음성
+    NOVA = "nova"  # 부드럽고 친근한 음성
+    SHIMMER = "shimmer"  # 부드럽고 우아한 음성
+
+
+class TTSModel(str, Enum):
+    """TTS 모델 옵션"""
+    TTS_1 = "tts-1"  # 표준 모델, 빠른 응답 (기본값)
+    TTS_1_HD = "tts-1-hd"  # 고품질 모델, 더 자연스러운 음성
+
+
+class STTModel(str, Enum):
+    """STT 모델 옵션"""
+    WHISPER_1 = "whisper-1"  # OpenAI Whisper 모델 (기본값, 유일한 옵션)
+
+
 # ============= 데이터 모델 =============
 
 
 class TextChatRequest(BaseModel):
-    message: str
-    session_id: Optional[str] = "default"
-    system_prompt: Optional[str] = None  # None이면 기본값 사용
-    model: Optional[str] = None  # None이면 기본값 사용
+    """텍스트 채팅 요청 모델"""
+    message: str = Field(..., description="사용자 메시지")
+    session_id: Optional[str] = Field(default="default", description="세션 ID (대화 히스토리 관리용)")
+    system_prompt: Optional[str] = Field(
+        default=None, 
+        description="시스템 프롬프트 (None이면 기본값 사용)"
+    )
+    model: Optional[ChatModel] = Field(
+        default=None,
+        description=f"ChatGPT 모델 선택. 옵션: {', '.join([m.value for m in ChatModel])}. None이면 기본값({settings.default_chat_model}) 사용"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "message": "안녕하세요",
+                "session_id": "user123",
+                "model": "gpt-4o-mini"
+            }
+        }
 
 
 class TTSRequest(BaseModel):
-    text: str
-    voice: Optional[str] = None  # None이면 기본값 사용
-    model: Optional[str] = None  # None이면 기본값 사용
+    """TTS 요청 모델"""
+    text: str = Field(..., description="음성으로 변환할 텍스트")
+    voice: Optional[TTSVoice] = Field(
+        default=None,
+        description=f"TTS 음성 선택. 옵션: {', '.join([v.value for v in TTSVoice])}. None이면 기본값({settings.default_tts_voice}) 사용"
+    )
+    model: Optional[TTSModel] = Field(
+        default=None,
+        description=f"TTS 모델 선택. 옵션: {', '.join([m.value for m in TTSModel])}. None이면 기본값({settings.default_tts_model}) 사용"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "text": "안녕하세요, 반갑습니다",
+                "voice": "alloy",
+                "model": "tts-1"
+            }
+        }
 
 
 # ============= STT 엔드포인트 =============
@@ -112,11 +211,23 @@ class TTSRequest(BaseModel):
 
 @app.post("/api/stt", summary="음성을 텍스트로 변환 (Speech-to-Text)")
 async def speech_to_text(
-    audio: UploadFile = File(..., description="음성 파일 (mp3, wav, m4a, webm 등)")
+    audio: UploadFile = File(..., description="음성 파일 (mp3, wav, m4a, webm, ogg, flac 등)")
 ):
     """
     음성 파일을 업로드하여 텍스트로 변환합니다.
-    OpenAI Whisper API 사용 (한국어 지원 우수)
+    
+    **지원 모델:**
+    - `whisper-1`: OpenAI Whisper 모델 (기본값, 한국어 지원 우수)
+    
+    **지원 파일 형식:**
+    - mp3, wav, m4a, webm, ogg, flac 등
+    
+    **언어:**
+    - 한국어(ko)로 자동 인식
+    - 다국어 지원 (자동 감지)
+    
+    **응답 형식:**
+    - JSON: `{"success": true, "text": "인식된 텍스트", "language": "ko"}`
     """
     try:
         # 임시 파일로 저장
@@ -154,12 +265,23 @@ async def text_chat(request: TextChatRequest):
     """
     텍스트 메시지를 ChatGPT에 전송하고 응답을 받습니다.
     세션별 대화 히스토리 관리 (Redis 사용)
+    
+    **사용 가능한 모델:**
+    - `gpt-4o-mini`: 빠르고 저렴한 모델 (기본값, 추천)
+    - `gpt-4o`: 최신 고성능 모델
+    - `gpt-4-turbo`: 고성능 모델
+    - `gpt-4`: 표준 GPT-4 모델
+    - `gpt-3.5-turbo`: 빠른 응답 모델
+    
+    **세션 관리:**
+    - `session_id`로 대화 히스토리 관리
+    - Redis에 30일간 저장
     """
     start_time = time.time()
     try:
         # 기본값 설정
         system_prompt = request.system_prompt or settings.default_system_prompt
-        model = request.model or settings.default_chat_model
+        model = request.model.value if request.model else settings.default_chat_model
         
         # 세션 히스토리 가져오기 또는 생성
         try:
@@ -254,12 +376,24 @@ async def streaming_chat(request: TextChatRequest):
     """
     텍스트 메시지를 ChatGPT에 전송하고 응답을 스트리밍으로 받습니다.
     실시간 응답 표시에 적합
+    
+    **사용 가능한 모델:**
+    - `gpt-4o-mini`: 빠르고 저렴한 모델 (기본값, 추천)
+    - `gpt-4o`: 최신 고성능 모델
+    - `gpt-4-turbo`: 고성능 모델
+    - `gpt-4`: 표준 GPT-4 모델
+    - `gpt-3.5-turbo`: 빠른 응답 모델
+    
+    **응답 형식:**
+    - `text/event-stream` (Server-Sent Events)
+    - 실시간 스트리밍 응답
+    - 형식: `data: {"content": "텍스트 청크"}\n\n`
     """
     async def generate():
         try:
             # 기본값 설정
             system_prompt = request.system_prompt or settings.default_system_prompt
-            model = request.model or settings.default_chat_model
+            model = request.model.value if request.model else settings.default_chat_model
             
             # 세션 히스토리 관리
             try:
@@ -312,15 +446,30 @@ async def streaming_chat(request: TextChatRequest):
 
 @app.post("/api/tts", summary="텍스트를 음성으로 변환 (Text-to-Speech)")
 async def text_to_speech(request: TTSRequest):
-    print(f"TTS text_to_speech is started!!")
     """
     텍스트를 음성 파일로 변환합니다.
     OpenAI TTS API 사용 (한국어 지원)
+    
+    **사용 가능한 음성 (voice):**
+    - `alloy`: 중성적이고 균형잡힌 음성 (기본값)
+    - `echo`: 깊고 따뜻한 음성
+    - `fable`: 밝고 활기찬 음성
+    - `onyx`: 깊고 강렬한 음성
+    - `nova`: 부드럽고 친근한 음성
+    - `shimmer`: 부드럽고 우아한 음성
+    
+    **사용 가능한 모델 (model):**
+    - `tts-1`: 표준 모델, 빠른 응답 (기본값)
+    - `tts-1-hd`: 고품질 모델, 더 자연스러운 음성 (느리지만 고품질)
+    
+    **응답 형식:**
+    - `audio/mpeg` (MP3 형식)
+    - 스트리밍 응답
     """
     try:
         # 기본값 설정
-        voice = request.voice or settings.default_tts_voice
-        model = request.model or settings.default_tts_model
+        voice = request.voice.value if request.voice else settings.default_tts_voice
+        model = request.model.value if request.model else settings.default_tts_model
         
         # TTS API 호출
         response = await client.audio.speech.create(
@@ -384,19 +533,37 @@ async def text_to_speech(request: TTSRequest):
 
 @app.post("/api/voice/process", summary="음성 입력 → 채팅 → 음성 응답 (통합)")
 async def process_voice(
-    audio: UploadFile = File(...),
-    session_id: Optional[str] = "default",
-    voice: Optional[str] = None,
-    model: Optional[str] = None
+    audio: UploadFile = File(..., description="음성 파일 (mp3, wav, m4a, webm 등)"),
+    session_id: Optional[str] = Query(default="default", description="세션 ID (대화 히스토리 관리용)"),
+    voice: Optional[TTSVoice] = Query(
+        default=None,
+        description=f"TTS 음성 선택. 옵션: {', '.join([v.value for v in TTSVoice])}. None이면 기본값({settings.default_tts_voice}) 사용"
+    ),
+    model: Optional[ChatModel] = Query(
+        default=None,
+        description=f"ChatGPT 모델 선택. 옵션: {', '.join([m.value for m in ChatModel])}. None이면 기본값({settings.default_chat_model}) 사용"
+    )
 ):
     """
     음성 입력을 받아 STT → ChatGPT → TTS 전체 프로세스를 수행합니다.
     클라이언트가 한 번의 요청으로 전체 흐름을 처리할 수 있습니다.
+    
+    **처리 흐름:**
+    1. STT: 음성 파일 → 텍스트 변환 (Whisper-1)
+    2. Chat: 텍스트 → ChatGPT 응답 생성
+    3. TTS: 응답 텍스트 → 음성 파일 생성
+    
+    **사용 가능한 옵션:**
+    - **voice**: TTS 음성 선택 (alloy, echo, fable, onyx, nova, shimmer)
+    - **model**: ChatGPT 모델 선택 (gpt-4o-mini, gpt-4o, gpt-4-turbo 등)
+    
+    **응답 형식:**
+    - `multipart/mixed`: 메타데이터(JSON) + 음성 파일(MP3)
     """
     try:
         # 기본값 설정
-        voice = voice or settings.default_tts_voice
-        chat_model = model or settings.default_chat_model
+        voice = voice.value if voice else settings.default_tts_voice
+        chat_model = model.value if model else settings.default_chat_model
         
         # 1. STT: 음성 → 텍스트
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(audio.filename)[1]) as temp_file:
@@ -522,10 +689,22 @@ async def process_voice(
 async def websocket_voice_chat(websocket: WebSocket):
     """
     WebSocket을 통한 실시간 음성 채팅
-    클라이언트가 음성 청크를 전송하면 실시간으로 응답
     
-    쿼리 파라미터:
-    - session_id: 기존 세션 ID (선택사항, 없으면 새 세션 생성)
+    **기능:**
+    - 실시간 양방향 통신
+    - 텍스트 메시지 스트리밍 응답
+    - 세션 히스토리 관리
+    
+    **쿼리 파라미터:**
+    - `session_id`: 세션 ID (선택사항, 없으면 자동 생성)
+    
+    **사용 모델:**
+    - ChatGPT: 기본 모델 사용 (설정 파일에서 변경 가능)
+    - 세션별 대화 히스토리 자동 관리
+    
+    **메시지 형식:**
+    - 클라이언트 → 서버: `{"type": "text", "message": "안녕하세요"}`
+    - 서버 → 클라이언트: `{"type": "content", "content": "안녕하세요"}`
     """
     await websocket.accept()
     

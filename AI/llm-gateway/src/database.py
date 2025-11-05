@@ -15,7 +15,7 @@ from contextlib import contextmanager
 import json
 import logging
 
-from config import settings
+from .config import settings
 
 # 로깅 설정
 logger = logging.getLogger(__name__)

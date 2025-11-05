@@ -11,7 +11,7 @@ from datetime import timedelta
 import redis.asyncio as aioredis
 from redis.exceptions import ConnectionError, TimeoutError, RedisError
 import logging
-from config import settings
+from .config import settings
 
 # 로깅 설정
 logger = logging.getLogger(__name__)
