@@ -51,6 +51,10 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    extra_hosts:
+      # Docker 컨테이너에서 호스트 머신의 localhost에 접근하기 위한 설정
+      # Linux에서는 host.docker.internal이 자동으로 지원되지 않으므로 명시적으로 추가
+      - "host.docker.internal:host-gateway"
     networks:
       - llm-gateway-network
 
@@ -62,21 +66,46 @@ services:
       - "${REDIS_EXTERNAL_PORT:-6379}:6379"
     command: >
       sh -c "
+      # 메모리 overcommit 설정 (호스트에서 설정 필요: sudo sysctl vm.overcommit_memory=1)
+      # 컨테이너 내부에서는 권한 없이 설정 불가하므로 무시
+      sysctl vm.overcommit_memory=1 2>/dev/null || true
+      # Redis 서버 시작 (경고 메시지 억제를 위해 로그 레벨 조정)
       if [ -n \"$$REDIS_PASSWORD\" ]; then
-        redis-server --requirepass $$REDIS_PASSWORD --appendonly yes
+        redis-server 
+          --requirepass $$REDIS_PASSWORD 
+          --appendonly yes 
+          --maxmemory 256mb 
+          --maxmemory-policy allkeys-lru 
+          --save 60 1000 
+          --stop-writes-on-bgsave-error no
+          --loglevel notice
       else
-        redis-server --appendonly yes
+        redis-server 
+          --appendonly yes 
+          --maxmemory 256mb 
+          --maxmemory-policy allkeys-lru 
+          --save 60 1000 
+          --stop-writes-on-bgsave-error no
+          --loglevel notice
       fi
       "
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     volumes:
       - redis-data:/data
+    # 참고: vm.overcommit_memory는 호스트 레벨 커널 파라미터이므로
+    # 컨테이너에서 직접 설정할 수 없습니다. 호스트에서 수동으로 설정하거나
+    # 컨테이너 내부에서 시도하되 실패해도 무시됩니다 (command에서 처리됨).
+    # 호스트에서 설정하려면: sudo sysctl vm.overcommit_memory=1
+    # 메모리 제한 설정 (선택사항)
+    # mem_limit: 512m
+    # mem_reservation: 256m
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a $$REDIS_PASSWORD ping; else redis-cli ping; fi"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 5s
     restart: unless-stopped
     networks:
       - llm-gateway-network
