@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>음성 지문 관리 테스트</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .status-bar {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .status-bar.waiting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-bar.recording {
+            background: #d1ecf1;
+            color: #0c5460;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status-bar.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-bar.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        button {
+            padding: 12px 30px;
+            margin: 5px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-primary {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-info {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .voiceprint-list {
+            max-height: 400px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+        
+        .voiceprint-item {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .voiceprint-item.inactive {
+            opacity: 0.6;
+            border-left-color: #6c757d;
+        }
+        
+        .voiceprint-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .voiceprint-id {
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .voiceprint-keywords {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .keyword-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .keyword-badge.base {
+            background: #007bff;
+            color: white;
+        }
+        
+        .keyword-badge.stt {
+            background: #28a745;
+            color: white;
+        }
+        
+        .voiceprint-meta {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            gap: 15px;
+        }
+        
+        .voiceprint-actions {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .voiceprint-actions button {
+            padding: 5px 15px;
+            font-size: 12px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .info-box h3 {
+            margin-bottom: 10px;
+            color: #004085;
+        }
+        
+        .info-box ul {
+            margin-left: 20px;
+            color: #004085;
+        }
+        
+        .info-box li {
+            margin: 5px 0;
+        }
+        
+        .recording-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #dc3545;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .audio-level-meter {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .audio-level-meter h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .level-display {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .level-bar-container {
+            flex: 1;
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .level-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);
+            width: 0%;
+            transition: width 0.1s linear;
+            border-radius: 15px;
+        }
+        
+        .level-value {
+            min-width: 60px;
+            text-align: right;
+            font-weight: bold;
+            font-size: 18px;
+            color: #333;
+        }
+        
+        .level-value.silent {
+            color: #999;
+        }
+        
+        .level-value.low {
+            color: #28a745;
+        }
+        
+        .level-value.medium {
+            color: #ffc107;
+        }
+        
+        .level-value.high {
+            color: #dc3545;
+        }
+        
+        .stt-display {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            min-height: 100px;
+        }
+        
+        .stt-display h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .stt-interim {
+            color: #666;
+            font-style: italic;
+            margin-bottom: 10px;
+            min-height: 24px;
+        }
+        
+        .stt-final {
+            color: #28a745;
+            font-weight: bold;
+            font-size: 18px;
+            min-height: 24px;
+            padding: 10px;
+            background: #d4edda;
+            border-radius: 5px;
+            border-left: 4px solid #28a745;
+        }
+        
+        .stt-placeholder {
+            color: #999;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 음성 지문 관리 테스트</h1>
+        <p class="subtitle">키워드 음성 지문을 등록하고 관리할 수 있습니다</p>
+        
+        <div class="status-bar waiting" id="statusBar">
+            대기 중... 키워드를 말하거나 수동으로 등록하세요
+        </div>
+        
+        <!-- 음성 지문 등록 섹션 -->
+        <div class="section">
+            <h2>📝 음성 지문 등록</h2>
+            
+            <div class="form-group">
+                <label for="baseKeyword">기준 키워드 (Base Keyword):</label>
+                <input type="text" id="baseKeyword" value="alfred" placeholder="예: alfred">
+            </div>
+            
+            <div class="form-group">
+                <label for="sttLanguage">STT 언어 선택:</label>
+                <select id="sttLanguage" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+                    <option value="en-US">영어 (English)</option>
+                    <option value="ko-KR">한국어 (Korean)</option>
+                </select>
+                <small style="color: #666;">브라우저 STT 언어 선택 (OpenAI Whisper는 자동으로 한국어 인식)</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="sttKeyword">STT 결과 키워드 (STT Keyword):</label>
+                <input type="text" id="sttKeyword" placeholder="예: rarfredo 또는 알프레드 (사용자가 실제로 발음한 키워드)">
+                <small style="color: #666;">사용자가 "alfred"를 어떻게 발음했는지 STT 결과를 입력하세요</small>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="useWhisper">
+                    OpenAI Whisper 사용 (한국어 인식 우수, 서버 요청 필요)
+                </label>
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    체크 시 OpenAI Whisper 사용, 체크 해제 시 브라우저 STT 사용 (기본값: 브라우저 STT, 실시간, 무료)
+                </small>
+            </div>
+            
+            <div class="controls">
+                <button class="btn-primary" onclick="startKeywordRecording()">
+                    🎤 키워드 녹음 시작
+                </button>
+                <button class="btn-danger" onclick="stopKeywordRecording()" id="stopBtn" disabled>
+                    ⏹️ 녹음 중지
+                </button>
+                <button class="btn-info" onclick="registerVoiceprint()">
+                    💾 음성 지문 등록
+                </button>
+            </div>
+            
+            <div id="recordingStatus" style="display: none; margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 5px;">
+                <span class="recording-indicator"></span>
+                <span id="recordingText">녹음 중...</span>
+            </div>
+            
+            <!-- 실시간 오디오 레벨 미터 -->
+            <div class="audio-level-meter" id="audioLevelMeter" style="display: none;">
+                <h3>🎤 실시간 음성 입력 레벨</h3>
+                <div class="level-display">
+                    <div class="level-bar-container">
+                        <div class="level-bar" id="levelBar"></div>
+                    </div>
+                    <div class="level-value silent" id="levelValue">-∞ dB</div>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 10px; color: #666;">
+                    <span>조용함</span>
+                    <span>보통</span>
+                    <span>크게</span>
+                </div>
+            </div>
+            
+            <!-- 실시간 STT 텍스트 표시 -->
+            <div class="stt-display" id="sttDisplay" style="display: none;">
+                <h3>📝 실시간 음성 인식 (STT)</h3>
+                <div class="stt-interim" id="sttInterim">
+                    <span class="stt-placeholder">인식 중...</span>
+                </div>
+                <div class="stt-final" id="sttFinal" style="display: none;">
+                    <span class="stt-placeholder">최종 결과가 여기에 표시됩니다</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 등록된 음성 지문 목록 -->
+        <div class="section">
+            <h2>📋 등록된 음성 지문 목록</h2>
+            
+            <div class="controls">
+                <button class="btn-secondary" onclick="loadVoiceprints()">
+                    🔄 목록 새로고침
+                </button>
+                <button class="btn-info" onclick="loadVoiceprints('alfred')">
+                    🔍 alfred만 조회
+                </button>
+            </div>
+            
+            <div id="voiceprintList" class="voiceprint-list">
+                <p style="text-align: center; color: #666; padding: 20px;">
+                    등록된 음성 지문이 없습니다. 위에서 음성 지문을 등록하세요.
+                </p>
+            </div>
+        </div>
+        
+        <!-- 테스트 가이드 -->
+        <div class="info-box">
+            <h3>📖 사용 가이드</h3>
+            <ul>
+                <li><strong>음성 지문 등록 방법 1 (자동):</strong>
+                    <ol>
+                        <li>STT 언어 선택 (영어 또는 한국어)</li>
+                        <li>OpenAI Whisper 사용 여부 선택 (한국어 권장)</li>
+                        <li>"키워드 녹음 시작" 버튼 클릭</li>
+                        <li>마이크 권한 허용</li>
+                        <li>키워드를 말하기 (예: "alfred", "알프레드" 등)</li>
+                        <li>"녹음 중지" 버튼 클릭</li>
+                        <li>STT 결과가 자동으로 입력됨 (수정 가능)</li>
+                        <li>"음성 지문 등록" 버튼 클릭</li>
+                    </ol>
+                </li>
+                <li><strong>음성 지문 등록 방법 2 (수동):</strong>
+                    <ol>
+                        <li>기준 키워드 입력 (예: "alfred")</li>
+                        <li>STT 결과 키워드 입력 (예: "rarfredo")</li>
+                        <li>"음성 지문 등록" 버튼 클릭 (오디오 없이 텍스트만 저장)</li>
+                    </ol>
+                </li>
+                <li><strong>음성 지문 테스트:</strong>
+                    <ol>
+                        <li>등록된 음성 지문이 있으면</li>
+                        <li>키워드 인식 시 자동으로 매칭됩니다</li>
+                        <li>test_alfred_voice.html에서 테스트 가능</li>
+                    </ol>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let recognition = null;
+        let recordedAudioBlob = null;
+        
+        // Web Speech API 지원 확인
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            console.warn('Web Speech API를 지원하지 않습니다.');
+        }
+        
+        // 오디오 레벨 측정 함수
+        function measureAudioLevel() {
+            if (!analyser || !dataArray) return;
+            
+            analyser.getByteTimeDomainData(dataArray);
+            
+            // RMS (Root Mean Square) 계산
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                const normalized = (dataArray[i] - 128) / 128;
+                sum += normalized * normalized;
+            }
+            const rms = Math.sqrt(sum / dataArray.length);
+            
+            // 데시벨로 변환
+            const dbLevel = rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+            const normalizedLevel = Math.max(0, Math.min(1, rms));
+            
+            // 레벨 업데이트
+            updateAudioLevel(normalizedLevel, dbLevel);
+            
+            // 애니메이션 프레임으로 계속 측정
+            if (isRecording || audioContext) {
+                levelAnimationFrame = requestAnimationFrame(measureAudioLevel);
+            }
+        }
+        
+        // 오디오 레벨 UI 업데이트
+        function updateAudioLevel(level, dbLevel) {
+            const levelBar = document.getElementById('levelBar');
+            const levelValue = document.getElementById('levelValue');
+            
+            if (!levelBar || !levelValue) return;
+            
+            const percentage = Math.min(100, level * 100);
+            levelBar.style.width = percentage + '%';
+            
+            if (dbLevel === -Infinity || dbLevel < -60) {
+                levelValue.textContent = '-∞ dB';
+                levelValue.className = 'level-value silent';
+            } else {
+                levelValue.textContent = dbLevel.toFixed(1) + ' dB';
+                
+                if (dbLevel < -30) {
+                    levelValue.className = 'level-value silent';
+                } else if (dbLevel < -15) {
+                    levelValue.className = 'level-value low';
+                } else if (dbLevel < -5) {
+                    levelValue.className = 'level-value medium';
+                } else {
+                    levelValue.className = 'level-value high';
+                }
+            }
+        }
+        
+        // STT 텍스트 업데이트
+        function updateSTTDisplay(interimText, finalText) {
+            const sttInterim = document.getElementById('sttInterim');
+            const sttFinal = document.getElementById('sttFinal');
+            
+            if (sttInterim) {
+                if (interimText) {
+                    sttInterim.innerHTML = `<span style="color: #666;">인식 중: </span><strong>${interimText}</strong>`;
+                } else if (!finalText) {
+                    sttInterim.innerHTML = '<span class="stt-placeholder">인식 중...</span>';
+                } else {
+                    sttInterim.innerHTML = '';
+                }
+            }
+            
+            if (sttFinal) {
+                if (finalText) {
+                    sttFinal.innerHTML = `<span style="color: #28a745;">최종 결과: </span><strong>${finalText}</strong>`;
+                    sttFinal.style.display = 'block';
+                } else {
+                    sttFinal.style.display = 'none';
+                }
+            }
+        }
+        
+        // 키워드 녹음 시작
+        async function startKeywordRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // 오디오 레벨 측정을 위한 AudioContext 설정
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                
+                // 오디오 레벨 측정 시작
+                measureAudioLevel();
+                
+                // 오디오 레벨 미터 표시
+                document.getElementById('audioLevelMeter').style.display = 'block';
+                document.getElementById('sttDisplay').style.display = 'block';
+                
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    recordedAudioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    
+                    // 오디오 레벨 측정 중지
+                    if (levelAnimationFrame) {
+                        cancelAnimationFrame(levelAnimationFrame);
+                        levelAnimationFrame = null;
+                    }
+                    if (microphone) {
+                        microphone.disconnect();
+                        microphone = null;
+                    }
+                    updateAudioLevel(0, -Infinity);
+                    
+                    // STT로 키워드 인식 시도
+                    recognizeKeyword();
+                };
+                
+                // Web Speech API로 실시간 STT (키워드 인식용)
+                const useWhisper = document.getElementById('useWhisper').checked;
+                const sttLanguage = document.getElementById('sttLanguage').value;
+                
+                if (!useWhisper && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    recognition = new SpeechRecognition();
+                    recognition.continuous = false;
+                    recognition.interimResults = true; // 실시간 결과 표시를 위해 true로 변경
+                    recognition.lang = sttLanguage;
+                    
+                    recognition.onresult = (event) => {
+                        let interimTranscript = '';
+                        let finalTranscript = '';
+                        
+                        for (let i = event.resultIndex; i < event.results.length; i++) {
+                            const transcript = event.results[i][0].transcript;
+                            if (event.results[i].isFinal) {
+                                finalTranscript += transcript + ' ';
+                            } else {
+                                interimTranscript += transcript + ' ';
+                            }
+                        }
+                        
+                        // 실시간 STT 텍스트 업데이트
+                        updateSTTDisplay(interimTranscript.trim(), finalTranscript.trim());
+                        
+                        if (finalTranscript.trim()) {
+                            // 최종 결과가 나오면 입력 필드에 설정
+                            const finalText = sttLanguage === 'ko-KR' 
+                                ? finalTranscript.trim() 
+                                : finalTranscript.trim().toLowerCase();
+                            document.getElementById('sttKeyword').value = finalText;
+                            updateStatus('success', `키워드 인식: "${finalText}"`);
+                        }
+                    };
+                    
+                    recognition.onerror = (event) => {
+                        console.error('STT 오류:', event.error);
+                        updateStatus('error', `STT 오류: ${event.error}`);
+                        updateSTTDisplay('', '');
+                    };
+                    
+                    recognition.onend = () => {
+                        // STT 종료 시 최종 결과만 표시
+                        const finalText = document.getElementById('sttKeyword').value;
+                        if (finalText) {
+                            updateSTTDisplay('', finalText);
+                        }
+                    };
+                    
+                    recognition.start();
+                } else if (useWhisper) {
+                    // OpenAI Whisper 사용 시 실시간 STT는 사용하지 않음
+                    updateStatus('recording', '녹음 중... (녹음 중지 후 OpenAI Whisper로 인식)');
+                    updateSTTDisplay('녹음 중... (녹음 중지 후 인식)', '');
+                }
+                
+                mediaRecorder.start();
+                isRecording = true;
+                document.getElementById('stopBtn').disabled = false;
+                document.getElementById('recordingStatus').style.display = 'block';
+                document.getElementById('recordingText').textContent = '녹음 중... 키워드를 말하세요';
+                updateStatus('recording', '녹음 중... 키워드를 말하세요');
+                
+            } catch (error) {
+                console.error('녹음 시작 실패:', error);
+                updateStatus('error', '마이크 접근 권한이 필요합니다.');
+            }
+        }
+        
+        // 키워드 녹음 중지
+        function stopKeywordRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                isRecording = false;
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('recordingStatus').style.display = 'none';
+                
+                if (recognition) {
+                    recognition.stop();
+                }
+                
+                // 오디오 레벨 측정 중지
+                if (levelAnimationFrame) {
+                    cancelAnimationFrame(levelAnimationFrame);
+                    levelAnimationFrame = null;
+                }
+            }
+        }
+        
+        // 키워드 인식 (녹음된 오디오를 서버로 전송하여 STT)
+        async function recognizeKeyword() {
+            if (!recordedAudioBlob) {
+                return;
+            }
+            
+            const useWhisper = document.getElementById('useWhisper').checked;
+            
+            // Web Speech API를 사용한 경우 이미 인식 완료
+            if (!useWhisper) {
+                return;
+            }
+            
+            try {
+                updateStatus('waiting', '키워드 인식 중... (OpenAI Whisper 사용)');
+                updateSTTDisplay('서버에서 인식 중...', '');
+                
+                const formData = new FormData();
+                formData.append('audio', recordedAudioBlob, 'keyword.webm');
+                
+                const response = await fetch(
+                    `${API_BASE_URL}/api/voice/process?response_format=json`,
+                    {
+                        method: 'POST',
+                        body: formData
+                    }
+                );
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.user_text) {
+                        // 한국어는 소문자 변환하지 않음
+                        const keyword = data.user_text.trim();
+                        document.getElementById('sttKeyword').value = keyword;
+                        updateStatus('success', `키워드 인식 완료: "${keyword}"`);
+                        updateSTTDisplay('', keyword);
+                    }
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('키워드 인식 실패:', error);
+                updateStatus('error', `키워드 인식 실패: ${error.message}`);
+                updateSTTDisplay('', '');
+            }
+        }
+        
+        // 음성 지문 등록
+        async function registerVoiceprint() {
+            const baseKeyword = document.getElementById('baseKeyword').value.trim();
+            const sttKeyword = document.getElementById('sttKeyword').value.trim();
+            
+            if (!baseKeyword || !sttKeyword) {
+                alert('기준 키워드와 STT 결과 키워드를 입력하세요.');
+                return;
+            }
+            
+            try {
+                updateStatus('waiting', '음성 지문 등록 중...');
+                
+                let audioData = null;
+                if (recordedAudioBlob) {
+                    // 오디오를 Base64로 변환
+                    audioData = await blobToBase64(recordedAudioBlob);
+                }
+                
+                const response = await fetch(`${API_BASE_URL}/api/keyword/voiceprint/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        base_keyword: baseKeyword,
+                        stt_keyword: sttKeyword,
+                        audio_data: audioData,
+                        session_id: 'voiceprint_test_' + Date.now()
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateStatus('success', 
+                        data.is_new 
+                            ? `✅ 새로운 음성 지문이 등록되었습니다 (ID: ${data.voiceprint_id})`
+                            : `🔄 음성 지문이 업데이트되었습니다 (ID: ${data.voiceprint_id})`
+                    );
+                    
+                    // 입력 필드 초기화
+                    document.getElementById('sttKeyword').value = '';
+                    recordedAudioBlob = null;
+                    
+                    // 목록 새로고침
+                    await loadVoiceprints();
+                } else {
+                    throw new Error('등록 실패');
+                }
+            } catch (error) {
+                console.error('음성 지문 등록 오류:', error);
+                updateStatus('error', `등록 실패: ${error.message}`);
+            }
+        }
+        
+        // Blob을 Base64로 변환
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+        
+        // 음성 지문 목록 조회
+        async function loadVoiceprints(baseKeyword = null) {
+            try {
+                updateStatus('waiting', '음성 지문 목록 조회 중...');
+                
+                let url = `${API_BASE_URL}/api/keyword/voiceprint`;
+                if (baseKeyword) {
+                    url += `?base_keyword=${encodeURIComponent(baseKeyword)}`;
+                }
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.voiceprints) {
+                    displayVoiceprints(data.voiceprints);
+                    updateStatus('success', `등록된 음성 지문: ${data.voiceprints.length}개`);
+                } else {
+                    displayVoiceprints([]);
+                }
+            } catch (error) {
+                console.error('음성 지문 목록 조회 오류:', error);
+                updateStatus('error', `조회 실패: ${error.message}`);
+            }
+        }
+        
+        // 음성 지문 목록 표시
+        function displayVoiceprints(voiceprints) {
+            const listDiv = document.getElementById('voiceprintList');
+            
+            if (voiceprints.length === 0) {
+                listDiv.innerHTML = `
+                    <p style="text-align: center; color: #666; padding: 20px;">
+                        등록된 음성 지문이 없습니다.
+                    </p>
+                `;
+                return;
+            }
+            
+            listDiv.innerHTML = voiceprints.map(vp => {
+                const createdDate = new Date(vp.created_at).toLocaleString('ko-KR');
+                const audioSize = vp.audio_data ? 
+                    `오디오: ${Math.round(vp.audio_data.length / 1024)}KB` : 
+                    '오디오 없음';
+                
+                return `
+                    <div class="voiceprint-item ${vp.is_active ? '' : 'inactive'}">
+                        <div class="voiceprint-header">
+                            <span class="voiceprint-id">ID: ${vp.id}</span>
+                            <span style="color: ${vp.is_active ? '#28a745' : '#6c757d'};">
+                                ${vp.is_active ? '✅ 활성' : '❌ 비활성'}
+                            </span>
+                        </div>
+                        <div class="voiceprint-keywords">
+                            <span class="keyword-badge base">기준: ${vp.base_keyword}</span>
+                            <span class="keyword-badge stt">STT: ${vp.stt_keyword}</span>
+                        </div>
+                        <div class="voiceprint-meta">
+                            <span>세션: ${vp.session_id || 'N/A'}</span>
+                            <span>생성일: ${createdDate}</span>
+                            <span>${audioSize}</span>
+                        </div>
+                        <div class="voiceprint-actions">
+                            <button class="btn-secondary" onclick="testVoiceprint(${vp.id}, '${vp.base_keyword}', '${vp.stt_keyword}')">
+                                🧪 테스트
+                            </button>
+                            <button class="btn-danger" onclick="deleteVoiceprint(${vp.id})">
+                                🗑️ 삭제
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 음성 지문 테스트
+        async function testVoiceprint(id, baseKeyword, sttKeyword) {
+            try {
+                updateStatus('waiting', `키워드 확인 테스트: "${sttKeyword}"`);
+                
+                const response = await fetch(`${API_BASE_URL}/api/keyword/check`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        stt_result: sttKeyword,
+                        base_keyword: baseKeyword,
+                        session_id: 'test_' + Date.now()
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.is_keyword && data.activate) {
+                    updateStatus('success', 
+                        `✅ 키워드 매칭 성공! 유사도: ${(data.similarity * 100).toFixed(1)}%`
+                    );
+                } else {
+                    updateStatus('error', 
+                        `❌ 키워드 매칭 실패. 유사도: ${(data.similarity * 100).toFixed(1)}%`
+                    );
+                }
+            } catch (error) {
+                console.error('테스트 오류:', error);
+                updateStatus('error', `테스트 실패: ${error.message}`);
+            }
+        }
+        
+        // 음성 지문 삭제 (비활성화)
+        async function deleteVoiceprint(id) {
+            if (!confirm('이 음성 지문을 삭제(비활성화)하시겠습니까?')) {
+                return;
+            }
+            
+            // 현재는 삭제 API가 없으므로 알림만 표시
+            alert('삭제 기능은 아직 구현되지 않았습니다. DB에서 직접 삭제하거나 비활성화하세요.');
+        }
+        
+        // 상태 업데이트
+        function updateStatus(type, message) {
+            const statusBar = document.getElementById('statusBar');
+            statusBar.className = `status-bar ${type}`;
+            statusBar.textContent = message;
+        }
+        
+        // 페이지 로드 시 목록 조회
+        window.addEventListener('DOMContentLoaded', () => {
+            loadVoiceprints();
+        });
+    </script>
+</body>
+</html>
+

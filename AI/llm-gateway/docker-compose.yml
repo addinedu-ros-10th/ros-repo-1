@@ -47,6 +47,8 @@ services:
     volumes:
       # 로그 저장 (선택사항)
       - ./logs:/app/logs
+      # 테스트 파일 (정적 파일 서빙용) - 개발 중 변경사항 반영
+      - ./tests:/app/tests
     depends_on:
       redis:
         condition: service_healthy

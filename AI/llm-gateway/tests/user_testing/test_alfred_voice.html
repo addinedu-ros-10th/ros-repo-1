@@ -98,6 +98,45 @@
             color: #28a745;
         }
         
+        .similarity-badge {
+            display: inline-block;
+            margin-left: 10px;
+            padding: 4px 8px;
+            background: #007bff;
+            color: white;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: normal;
+        }
+        
+        .voiceprint-status {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .voiceprint-status.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        
+        .voiceprint-status.error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        
+        .voiceprint-stats {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+        
         .conversation {
             max-height: 400px;
             overflow-y: auto;
@@ -368,7 +407,14 @@
         
         <div class="keyword-indicator" id="keywordIndicator">
             키워드 감지: <span id="keywordStatus">대기 중</span>
+            <span class="similarity-badge" id="similarityBadge" style="display: none;"></span>
         </div>
+        
+        <div class="voiceprint-stats" id="voiceprintStats" style="display: none;">
+            등록된 음성 지문: <span id="voiceprintCount">0</span>개
+        </div>
+        
+        <div class="voiceprint-status" id="voiceprintStatus" style="display: none;"></div>
         
         <div class="audio-level-meter">
             <h3>🎤 음성 입력 레벨</h3>
@@ -445,6 +491,9 @@
         let currentAudio = null;
         let conversationHistory = [];
         let sessionId = 'alfred_' + Date.now();
+        let lastDetectedKeyword = null; // 마지막 감지된 키워드 STT 결과 저장
+        let keywordAudioBuffer = null; // 키워드 감지 시점의 오디오 버퍼
+        let voiceprintCount = 0; // 등록된 음성 지문 개수
         
         // 설정 파라미터
         function getSettings() {
@@ -495,19 +544,19 @@
                     }
                 }
                 
-                // 키워드 감지 개선: 더 유연한 매칭
-                const fullText = (interimTranscript + ' ' + finalTranscript).toLowerCase();
-                // 단어 경계를 고려한 키워드 매칭 (더 정확한 감지)
+                // 키워드 감지: 서버 API를 통해 확인
+                const fullText = (interimTranscript + ' ' + finalTranscript).toLowerCase().trim();
+                
+                // 키워드가 포함되어 있는지 기본 확인 (서버 호출 전 필터링)
                 const keywordRegex = new RegExp(`\\b${KEYWORD}\\b`, 'i');
                 const keywordMatch = keywordRegex.test(fullText);
-                
-                // 또는 단순 포함 확인 (더 관대한 감지)
                 const keywordIncluded = fullText.includes(KEYWORD);
                 
-                // 키워드가 감지되고 세션이 활성화되지 않았을 때만 트리거
+                // 키워드가 감지되고 세션이 활성화되지 않았을 때만 서버로 확인 요청
                 if ((keywordMatch || keywordIncluded) && !sessionActive && isListening) {
-                    console.log('키워드 감지:', fullText);
-                    detectKeyword();
+                    console.log('키워드 후보 감지:', fullText);
+                    // 서버에서 키워드 확인 및 음성 인터페이스 활성화 여부 확인
+                    checkKeywordWithServer(fullText);
                 }
             };
             
@@ -549,17 +598,132 @@
             return recognition;
         }
         
-        // 키워드 감지 처리
-        function detectKeyword() {
+        // 서버에서 키워드 확인 및 활성화 처리
+        async function checkKeywordWithServer(sttResult) {
             if (sessionActive) {
                 // 이미 세션이 활성화되어 있으면 무시
+                return;
+            }
+            
+            try {
+                // 키워드 확인 요청
+                const response = await fetch(`${API_BASE_URL}/api/keyword/check`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        stt_result: sttResult,
+                        base_keyword: KEYWORD,
+                        session_id: sessionId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.is_keyword && data.activate) {
+                    console.log('키워드 확인됨:', data.matched_keyword, '유사도:', data.similarity);
+                    
+                    // 마지막 감지된 키워드 저장
+                    lastDetectedKeyword = {
+                        stt_result: sttResult,
+                        matched_keyword: data.matched_keyword,
+                        voiceprint_id: data.voiceprint_id,
+                        similarity: data.similarity || 1.0
+                    };
+                    
+                    // 유사도 표시
+                    showSimilarity(data.similarity || 1.0);
+                    
+                    // 키워드 활성화 처리
+                    activateKeyword(data.matched_keyword, sttResult, data.voiceprint_id);
+                    
+                    // 음성 지문이 없으면 등록 (키워드 감지 시점의 오디오는 별도 녹음 필요)
+                    // 현재 구조에서는 키워드 감지 후 첫 질문 녹음 시 음성 지문 등록
+                } else {
+                    console.log('키워드 매칭 실패:', sttResult, '유사도:', data.similarity || 0);
+                    lastDetectedKeyword = null;
+                    hideSimilarity();
+                }
+            } catch (error) {
+                console.error('키워드 확인 오류:', error);
+                // 서버 오류 시 기본 키워드 매칭으로 폴백
+                if (sttResult.includes(KEYWORD)) {
+                    activateKeyword(KEYWORD, sttResult);
+                }
+            }
+        }
+        
+        // 유사도 표시
+        function showSimilarity(similarity) {
+            const badge = document.getElementById('similarityBadge');
+            const percentage = Math.round(similarity * 100);
+            badge.textContent = `유사도 ${percentage}%`;
+            badge.style.display = 'inline-block';
+            
+            // 유사도에 따른 색상 변경
+            if (similarity >= 0.9) {
+                badge.style.background = '#28a745';
+            } else if (similarity >= 0.7) {
+                badge.style.background = '#ffc107';
+                badge.style.color = '#000';
+            } else {
+                badge.style.background = '#dc3545';
+            }
+        }
+        
+        function hideSimilarity() {
+            document.getElementById('similarityBadge').style.display = 'none';
+        }
+        
+        // 음성 지문 상태 표시
+        function showVoiceprintStatus(message, isSuccess = true) {
+            const statusDiv = document.getElementById('voiceprintStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = `voiceprint-status ${isSuccess ? 'success' : 'error'}`;
+            statusDiv.style.display = 'block';
+            
+            // 5초 후 자동 숨김
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        // 음성 지문 개수 업데이트
+        async function updateVoiceprintCount() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/keyword/voiceprint?base_keyword=${KEYWORD}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.voiceprints) {
+                        voiceprintCount = data.voiceprints.length;
+                        const countDiv = document.getElementById('voiceprintCount');
+                        const statsDiv = document.getElementById('voiceprintStats');
+                        countDiv.textContent = voiceprintCount;
+                        if (voiceprintCount > 0) {
+                            statsDiv.style.display = 'block';
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('음성 지문 개수 조회 실패:', error);
+            }
+        }
+        
+        // 키워드 활성화 처리
+        function activateKeyword(matchedKeyword, sttResult, voiceprintId = null) {
+            if (sessionActive) {
                 return;
             }
             
             sessionActive = true;
             document.getElementById('keywordStatus').textContent = '감지됨! 질문을 말하세요';
             document.getElementById('keywordIndicator').classList.add('active');
-            updateStatus('listening', '🎯 키워드 감지! 질문을 말하세요...');
+            updateStatus('listening', `🎯 키워드 감지! (${matchedKeyword}) 질문을 말하세요...`);
             
             // 키워드 감지 후 설정된 대기 시간 후 자동으로 녹음 시작
             const settings = getSettings();
@@ -568,6 +732,62 @@
                     startRecording();
                 }
             }, settings.keywordWaitTime);
+        }
+        
+        // 키워드 감지 처리 (레거시, 호환성을 위해 유지)
+        function detectKeyword() {
+            activateKeyword(KEYWORD, KEYWORD);
+        }
+        
+        // 음성 지문 등록
+        async function registerVoiceprint(sttKeyword, audioBlob) {
+            try {
+                // 오디오를 Base64로 변환
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64Audio = reader.result.split(',')[1]; // data:audio/...;base64, 제거
+                    
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/keyword/voiceprint/register`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                base_keyword: KEYWORD,
+                                stt_keyword: sttKeyword,
+                                audio_data: base64Audio,
+                                session_id: sessionId
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        const data = await response.json();
+                        console.log('음성 지문 등록:', data.is_new ? '신규' : '업데이트', data.voiceprint_id);
+                        
+                        // UI 피드백
+                        if (data.success) {
+                            const message = data.is_new 
+                                ? `✅ 새로운 음성 지문이 등록되었습니다 (ID: ${data.voiceprint_id})`
+                                : `🔄 음성 지문이 업데이트되었습니다 (ID: ${data.voiceprint_id})`;
+                            showVoiceprintStatus(message, true);
+                            
+                            // 음성 지문 개수 업데이트
+                            await updateVoiceprintCount();
+                        }
+                    } catch (error) {
+                        console.error('음성 지문 등록 오류:', error);
+                        showVoiceprintStatus(`❌ 음성 지문 등록 실패: ${error.message}`, false);
+                    }
+                };
+                reader.readAsDataURL(audioBlob);
+            } catch (error) {
+                console.error('음성 지문 등록 준비 오류:', error);
+                showVoiceprintStatus(`❌ 음성 지문 등록 준비 실패: ${error.message}`, false);
+            }
         }
         
         // 오디오 레벨 측정 재시작
@@ -787,6 +1007,17 @@
                     // AI 응답 표시
                     addMessage('assistant', data.assistant_text);
                     
+                    // 키워드 감지 후 첫 질문이면 음성 지문 등록 시도
+                    if (lastDetectedKeyword) {
+                        // voiceprint_id가 null이거나, 새로운 STT 결과면 등록
+                        if (lastDetectedKeyword.voiceprint_id === null || 
+                            lastDetectedKeyword.stt_result !== data.user_text) {
+                            // 질문 오디오를 음성 지문으로 등록
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                            registerVoiceprint(lastDetectedKeyword.stt_result, audioBlob);
+                        }
+                    }
+                    
                     // Base64 오디오 디코딩 및 재생
                     if (data.audio_base64) {
                         playAudioFromBase64(data.audio_base64, data.assistant_text);
@@ -794,8 +1025,10 @@
                     
                     // 세션 상태 초기화 (오디오 재생 완료 후 자동 대기 모드에서 다시 활성화됨)
                     sessionActive = false;
+                    lastDetectedKeyword = null; // 사용 후 초기화
                     document.getElementById('keywordStatus').textContent = '대기 중';
                     document.getElementById('keywordIndicator').classList.remove('active');
+                    hideSimilarity();
                     
                     // 키워드 감지를 다시 활성화 (recognition이 실행 중이면 계속 실행됨)
                     if (isListening && recognition) {
@@ -860,6 +1093,7 @@
                         sessionActive = false;
                         document.getElementById('keywordStatus').textContent = '대기 중';
                         document.getElementById('keywordIndicator').classList.remove('active');
+                        hideSimilarity();
                         
                         // 키워드 감지를 다시 활성화
                         if (recognition && isListening) {
@@ -989,6 +1223,9 @@
                 recognition.start();
                 document.getElementById('startBtn').disabled = true;
                 document.getElementById('stopBtn').disabled = false;
+                
+                // 음성 지문 개수 조회
+                await updateVoiceprintCount();
             } catch (error) {
                 console.error('시작 실패:', error);
             }
@@ -1047,6 +1284,7 @@
             sessionActive = false;
             document.getElementById('keywordStatus').textContent = '대기 중';
             document.getElementById('keywordIndicator').classList.remove('active');
+            hideSimilarity();
             updateStatus('waiting', '대화가 초기화되었습니다.');
         }
         

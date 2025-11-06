@@ -23,6 +23,7 @@ from enum import Enum
 import tempfile
 import aiofiles
 import logging
+from datetime import datetime
 
 from .config import settings, get_cors_origins
 from .redis_session import redis_session_manager
@@ -31,7 +32,8 @@ from .database import (
     save_conversation_to_db, 
     load_conversation_from_db,
     log_api_request,
-    log_cost
+    log_cost,
+    KeywordVoiceprint
 )
 import time
 
@@ -696,6 +698,289 @@ async def process_voice(
     except Exception as e:
         logger.error(f"Voice process error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"음성 처리 실패: {str(e)}")
+
+
+# ============= Keyword 음성 지문 엔드포인트 =============
+
+
+class KeywordCheckRequest(BaseModel):
+    """Keyword 인식 확인 요청 모델"""
+    stt_result: str = Field(..., description="STT 결과 텍스트")
+    base_keyword: str = Field(..., description="기준 키워드 (예: 'alfred')")
+    audio_data: Optional[str] = Field(None, description="음성 오디오 데이터 (Base64, 선택사항)")
+    session_id: Optional[str] = Field(None, description="세션 ID")
+
+
+class VoiceprintRegisterRequest(BaseModel):
+    """음성 지문 등록 요청 모델"""
+    base_keyword: str = Field(..., description="기준 키워드 (예: 'alfred')")
+    stt_keyword: str = Field(..., description="STT 결과 키워드 (예: 'rarpred')")
+    audio_data: Optional[str] = Field(None, description="음성 지문 오디오 (Base64)")
+    session_id: Optional[str] = Field(None, description="세션 ID")
+    user_id: Optional[str] = Field(None, description="사용자 ID")
+
+
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """Levenshtein distance 계산 (유사도 기반 매칭용)"""
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+    
+    if len(s2) == 0:
+        return len(s1)
+    
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+    
+    return previous_row[-1]
+
+
+def calculate_similarity(s1: str, s2: str) -> float:
+    """두 문자열의 유사도 계산 (0.0 ~ 1.0)"""
+    distance = levenshtein_distance(s1.lower(), s2.lower())
+    max_len = max(len(s1), len(s2))
+    if max_len == 0:
+        return 1.0
+    return 1.0 - (distance / max_len)
+
+
+@app.post("/api/keyword/check", summary="Keyword 인식 및 활성화 확인")
+async def check_keyword(request: KeywordCheckRequest):
+    """
+    STT 결과를 받아 keyword 인식 및 음성 인터페이스 활성화 여부를 확인합니다.
+    
+    **처리 흐름:**
+    1. 등록된 keyword와 STT 결과 비교 (정확한 매칭 우선)
+    2. 매칭 실패 시 유사도 기반 fuzzy matching
+    3. 매칭 성공 시 활성화 여부 반환
+    
+    **응답:**
+    - `is_keyword`: keyword 인식 여부
+    - `activate`: 음성 인터페이스 활성화 여부
+    - `matched_keyword`: 매칭된 keyword (없으면 None)
+    """
+    try:
+        if not db_manager._initialized:
+            # DB가 없으면 기본 키워드만 확인
+            base_keyword_lower = request.base_keyword.lower()
+            stt_result_lower = request.stt_result.lower().strip()
+            
+            # 정확한 매칭 또는 포함 확인
+            if stt_result_lower == base_keyword_lower or base_keyword_lower in stt_result_lower:
+                return {
+                    "is_keyword": True,
+                    "activate": True,
+                    "matched_keyword": request.stt_result,
+                    "similarity": 1.0
+                }
+            else:
+                # 유사도 계산
+                similarity = calculate_similarity(stt_result_lower, base_keyword_lower)
+                if similarity >= 0.7:  # 70% 이상 유사도
+                    return {
+                        "is_keyword": True,
+                        "activate": True,
+                        "matched_keyword": request.stt_result,
+                        "similarity": similarity
+                    }
+                else:
+                    return {
+                        "is_keyword": False,
+                        "activate": False,
+                        "matched_keyword": None,
+                        "similarity": similarity
+                    }
+        
+        # DB에서 등록된 keyword 조회
+        with db_manager.get_session() as session:
+            # base_keyword 기준으로 등록된 모든 keyword 조회
+            voiceprints = session.query(KeywordVoiceprint)\
+                .filter_by(base_keyword=request.base_keyword)\
+                .filter_by(is_active=True)\
+                .all()
+            
+            stt_result_lower = request.stt_result.lower().strip()
+            
+            # 1. 정확한 매칭 확인
+            for vp in voiceprints:
+                if vp.stt_keyword.lower() == stt_result_lower:
+                    return {
+                        "is_keyword": True,
+                        "activate": True,
+                        "matched_keyword": vp.stt_keyword,
+                        "similarity": 1.0,
+                        "voiceprint_id": vp.id
+                    }
+            
+            # 2. Fuzzy matching (유사도 기반)
+            best_match = None
+            best_similarity = 0.0
+            similarity_threshold = 0.7  # 70% 이상 유사도
+            
+            for vp in voiceprints:
+                similarity = calculate_similarity(stt_result_lower, vp.stt_keyword.lower())
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_match = vp
+            
+            # base_keyword 자체와도 비교
+            base_similarity = calculate_similarity(stt_result_lower, request.base_keyword.lower())
+            if base_similarity > best_similarity:
+                best_similarity = base_similarity
+                best_match = None  # base_keyword와 매칭
+            
+            if best_similarity >= similarity_threshold:
+                return {
+                    "is_keyword": True,
+                    "activate": True,
+                    "matched_keyword": best_match.stt_keyword if best_match else request.base_keyword,
+                    "similarity": best_similarity,
+                    "voiceprint_id": best_match.id if best_match else None
+                }
+            else:
+                return {
+                    "is_keyword": False,
+                    "activate": False,
+                    "matched_keyword": None,
+                    "similarity": best_similarity
+                }
+    
+    except Exception as e:
+        logger.error(f"Keyword check error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Keyword 확인 실패: {str(e)}")
+
+
+@app.post("/api/keyword/voiceprint/register", summary="음성 지문 등록")
+async def register_voiceprint(request: VoiceprintRegisterRequest):
+    """
+    새로운 키워드 음성 지문을 등록합니다.
+    
+    **처리 흐름:**
+    1. 동일한 base_keyword와 stt_keyword 조합이 이미 있는지 확인
+    2. 있으면 업데이트, 없으면 새로 등록
+    3. 음성 오디오 데이터 저장 (Base64)
+    
+    **응답:**
+    - `success`: 성공 여부
+    - `voiceprint_id`: 등록된 음성 지문 ID
+    - `is_new`: 신규 등록 여부
+    """
+    try:
+        if not db_manager._initialized:
+            raise HTTPException(status_code=503, detail="데이터베이스가 초기화되지 않았습니다")
+        
+        with db_manager.get_session() as session:
+            # 기존 등록 확인
+            existing = session.query(KeywordVoiceprint)\
+                .filter_by(base_keyword=request.base_keyword)\
+                .filter_by(stt_keyword=request.stt_keyword)\
+                .filter_by(session_id=request.session_id)\
+                .first()
+            
+            if existing:
+                # 기존 등록 업데이트
+                existing.audio_data = request.audio_data
+                existing.updated_at = datetime.utcnow()
+                existing.is_active = True
+                if request.user_id:
+                    existing.user_id = request.user_id
+                
+                session.commit()
+                
+                return {
+                    "success": True,
+                    "voiceprint_id": existing.id,
+                    "is_new": False,
+                    "message": "음성 지문이 업데이트되었습니다"
+                }
+            else:
+                # 새로 등록
+                new_voiceprint = KeywordVoiceprint(
+                    base_keyword=request.base_keyword,
+                    stt_keyword=request.stt_keyword,
+                    audio_data=request.audio_data,
+                    session_id=request.session_id,
+                    user_id=request.user_id,
+                    is_active=True
+                )
+                session.add(new_voiceprint)
+                session.commit()
+                
+                return {
+                    "success": True,
+                    "voiceprint_id": new_voiceprint.id,
+                    "is_new": True,
+                    "message": "새로운 음성 지문이 등록되었습니다"
+                }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Voiceprint registration error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"음성 지문 등록 실패: {str(e)}")
+
+
+@app.get("/api/keyword/voiceprint", summary="음성 지문 조회")
+async def get_voiceprints(
+    base_keyword: Optional[str] = Query(None, description="기준 키워드"),
+    session_id: Optional[str] = Query(None, description="세션 ID")
+):
+    """
+    등록된 키워드 음성 지문을 조회합니다.
+    
+    **쿼리 파라미터:**
+    - `base_keyword`: 기준 키워드로 필터링 (선택사항)
+    - `session_id`: 세션 ID로 필터링 (선택사항)
+    
+    **응답:**
+    - 음성 지문 목록 (base_keyword, stt_keyword, created_at 등)
+    """
+    try:
+        if not db_manager._initialized:
+            return {
+                "success": True,
+                "voiceprints": [],
+                "message": "데이터베이스가 초기화되지 않았습니다"
+            }
+        
+        with db_manager.get_session() as session:
+            query = session.query(KeywordVoiceprint).filter_by(is_active=True)
+            
+            if base_keyword:
+                query = query.filter_by(base_keyword=base_keyword)
+            if session_id:
+                query = query.filter_by(session_id=session_id)
+            
+            voiceprints = query.order_by(KeywordVoiceprint.created_at.desc()).all()
+            
+            result = []
+            for vp in voiceprints:
+                result.append({
+                    "id": vp.id,
+                    "base_keyword": vp.base_keyword,
+                    "stt_keyword": vp.stt_keyword,
+                    "session_id": vp.session_id,
+                    "user_id": vp.user_id,
+                    "created_at": vp.created_at.isoformat() if vp.created_at else None,
+                    "updated_at": vp.updated_at.isoformat() if vp.updated_at else None,
+                    "has_audio": bool(vp.audio_data)
+                })
+            
+            return {
+                "success": True,
+                "voiceprints": result,
+                "count": len(result)
+            }
+    
+    except Exception as e:
+        logger.error(f"Voiceprint query error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"음성 지문 조회 실패: {str(e)}")
 
 
 # ============= WebSocket 실시간 통신 =============

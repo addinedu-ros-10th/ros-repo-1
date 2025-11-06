@@ -6,7 +6,7 @@
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from sqlalchemy import create_engine, Column, String, Text, DateTime, Integer, Float, JSON, Index, text
+from sqlalchemy import create_engine, Column, String, Text, DateTime, Integer, Float, JSON, Index, text, Boolean
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
@@ -96,6 +96,26 @@ class CostLog(Base):
     __table_args__ = (
         Index('idx_session_created', 'session_id', 'created_at'),
         Index('idx_service_created', 'service_type', 'created_at'),
+    )
+
+
+class KeywordVoiceprint(Base):
+    """키워드 음성 지문 테이블"""
+    __tablename__ = "keyword_voiceprints"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    base_keyword = Column(String(255), nullable=False, index=True)  # 기준 키워드 (예: "alfred")
+    stt_keyword = Column(String(255), nullable=False)  # STT 결과 키워드 (예: "rarpred")
+    audio_data = Column(Text, nullable=True)  # 음성 지문 오디오 (Base64)
+    session_id = Column(String(255), index=True, nullable=True)  # 세션 ID
+    user_id = Column(String(255), index=True, nullable=True)  # 사용자 ID (향후 확장용)
+    is_active = Column(Boolean, default=True, nullable=False)  # 활성화 여부
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # 인덱스
+    __table_args__ = (
+        Index('idx_base_stt_keyword', 'base_keyword', 'stt_keyword'),
     )
 
 
@@ -283,7 +303,7 @@ class DatabaseManager:
         
         from sqlalchemy import inspect
         inspector = inspect(self.engine)
-        required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs'}
+        required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints'}
         
         # 현재 스키마 확인
         try:
@@ -463,7 +483,7 @@ class DatabaseManager:
                     from sqlalchemy import inspect
                     inspector = inspect(self.engine)
                     existing_tables = set(inspector.get_table_names())
-                    required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs'}
+                    required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints'}
                     
                     if required_tables.issubset(existing_tables):
                         print(f"✓ All required tables verified: {', '.join(sorted(required_tables))}")
@@ -503,7 +523,7 @@ class DatabaseManager:
     def _grant_permissions(self):
         """다른 사용자 계정에 테이블 권한 부여"""
         try:
-            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs'}
+            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints'}
             
             # 권한을 부여할 추가 사용자 목록 (환경 변수에서 읽거나 기본값 사용)
             additional_users = []
@@ -641,6 +661,25 @@ class DatabaseManager:
                 """),
                 text("CREATE INDEX IF NOT EXISTS idx_session_created ON cost_logs(session_id, created_at)"),
                 text("CREATE INDEX IF NOT EXISTS idx_service_created ON cost_logs(service_type, created_at)")
+            ],
+            'keyword_voiceprints': [
+                text("""
+                    CREATE TABLE IF NOT EXISTS keyword_voiceprints (
+                        id SERIAL PRIMARY KEY,
+                        base_keyword VARCHAR(255) NOT NULL,
+                        stt_keyword VARCHAR(255) NOT NULL,
+                        audio_data TEXT,
+                        session_id VARCHAR(255),
+                        user_id VARCHAR(255),
+                        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                """),
+                text("CREATE INDEX IF NOT EXISTS idx_base_keyword ON keyword_voiceprints(base_keyword)"),
+                text("CREATE INDEX IF NOT EXISTS idx_session_id ON keyword_voiceprints(session_id)"),
+                text("CREATE INDEX IF NOT EXISTS idx_user_id ON keyword_voiceprints(user_id)"),
+                text("CREATE INDEX IF NOT EXISTS idx_base_stt_keyword ON keyword_voiceprints(base_keyword, stt_keyword)")
             ]
         }
         
@@ -756,7 +795,7 @@ class DatabaseManager:
             from sqlalchemy import inspect
             inspector = inspect(self.engine)
             existing_tables = set(inspector.get_table_names())
-            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs'}
+            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints'}
             
             if not required_tables.issubset(existing_tables):
                 missing = required_tables - existing_tables
@@ -779,7 +818,7 @@ class DatabaseManager:
             }
         
         try:
-            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs'}
+            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints'}
             
             # 현재 스키마 및 데이터베이스 정보 확인
             current_schema = None
