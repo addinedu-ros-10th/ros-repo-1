@@ -211,7 +211,6 @@ install/
 build/
 log/
 *.bag
-*.world
 *.launch.pyc
 
 # ---- Arduino / C++ ----
