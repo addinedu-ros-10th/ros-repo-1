@@ -31,9 +31,25 @@ class Talker(Node): # ROS2 퍼블리셔 노드
         self.publisher_.publish(msg)
         self.get_logger().info(f'Publishing: "{msg.data}"')
 
+class TalkerLCD(Node): # ROS2 LCD 노드
+
+    def __init__(self, person_name):
+        super().__init__("talker_pinky_lcd")
+
+        self.publisher_ = self.create_publisher(String, "/lcd/status", 5)
+        self.timer = self.create_timer(0.02, self.timer_callback)
+
+        self.person_name = person_name
+
+    def timer_callback(self):
+        msg = String()
+        msg.data = f"{self.person_name}"
+        self.publisher_.publish(msg)
+        self.get_logger().info(f'publishing: "{msg.data}"')
+
 def main():
     rclpy.init()
-    node = Talker()
+    node_talker = Talker()
 
     global time_count
 
@@ -99,13 +115,23 @@ def main():
                 if SHOW_WINDOW:
                     model = YOLO("face_recognition_model.pt")
 
+                    names = model.names
+
                     rotated_img = cv2.rotate(img, cv2.ROTATE_180)
 
                     results = model(rotated_img)
 
                     for result in results: # 얼굴 인식 결과가 존재하는 경우 ROS2 퍼블리시 실행
                         if len(result.boxes) > 0 and (time_count == 0 or time.time() - time_count > 5):
-                            rclpy.spin_once(node)
+                            rclpy.spin_once(node_talker)
+
+                            for box in result.boxes:
+                                cls_id = int(box.cls[0])
+
+                                node_lcd_status = TalkerLCD(names[cls_id])
+                                break # 첫 번째 얼굴만 처리
+
+                            rclpy.spin_once(node_lcd_status)
 
                             time_count = time.time()
                             break
@@ -117,7 +143,7 @@ def main():
 
     finally:
         sock.close()
-        node.destroy_node()
+        node_talker.destroy_node()
         rclpy.shutdown()
         if SHOW_WINDOW:
             cv2.destroyAllWindows()
