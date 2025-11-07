@@ -3,7 +3,8 @@
 # 
 # 이 스크립트는 pinky 로봇의 git 저장소를 동기화합니다:
 # 1. dev 브랜치로 switch
-# 2. base/ROS2/* 브랜치들을 모두 pull
+# 2. dev 브랜치에 base/ROS2/* 브랜치들을 merge하여 코드 통합
+#    (base/ROS2/pinky_pro는 제외)
 #
 # Usage:
 #   ./sync_pinky_git.sh
@@ -104,15 +105,15 @@ git pull "$GIT_REMOTE" dev || {
     log_warn "dev 브랜치 pull에 실패했습니다. 계속 진행합니다..."
 }
 
-# base/ROS2/* 브랜치들 찾기 및 pull
-log_info "base/ROS2/* 브랜치들을 찾는 중..."
+# base/ROS2/* 브랜치들을 dev 브랜치에 merge
+log_info "base/ROS2/* 브랜치들을 dev 브랜치에 merge하는 중..."
 
 # 배열로 브랜치 목록 저장
 ROS2_BRANCHES_ARRAY=()
 
-# 원격 브랜치 목록에서 base/ROS2/* 패턴 찾기
+# 원격 브랜치 목록에서 base/ROS2/* 패턴 찾기 (base/ROS2/pinky_pro 제외)
 while IFS= read -r branch; do
-    if [ -n "$branch" ]; then
+    if [ -n "$branch" ] && [ "$branch" != "base/ROS2/pinky_pro" ]; then
         ROS2_BRANCHES_ARRAY+=("$branch")
     fi
 done < <(git branch -r | grep -E "^\s*${GIT_REMOTE}/base/ROS2/" | sed "s|${GIT_REMOTE}/||" | sed 's/^[[:space:]]*//' || true)
@@ -121,7 +122,7 @@ done < <(git branch -r | grep -E "^\s*${GIT_REMOTE}/base/ROS2/" | sed "s|${GIT_R
 if [ ${#ROS2_BRANCHES_ARRAY[@]} -eq 0 ]; then
     log_info "로컬 브랜치에서도 확인합니다..."
     while IFS= read -r branch; do
-        if [ -n "$branch" ]; then
+        if [ -n "$branch" ] && [ "$branch" != "base/ROS2/pinky_pro" ]; then
             ROS2_BRANCHES_ARRAY+=("$branch")
         fi
     done < <(git branch | grep -E "^\s*base/ROS2/" | sed 's/^\*\?[[:space:]]*//' || true)
@@ -130,40 +131,43 @@ fi
 if [ ${#ROS2_BRANCHES_ARRAY[@]} -eq 0 ]; then
     log_warn "base/ROS2/* 브랜치를 찾을 수 없습니다. 스킵합니다."
 else
-    log_info "다음 브랜치들을 동기화합니다:"
+    log_info "다음 브랜치들을 dev 브랜치에 merge합니다 (base/ROS2/pinky_pro 제외):"
     for branch in "${ROS2_BRANCHES_ARRAY[@]}"; do
         echo "  - $branch"
     done
     
-    # 각 브랜치에 대해 pull 수행
+    # dev 브랜치에 머물면서 각 브랜치를 merge
     for branch in "${ROS2_BRANCHES_ARRAY[@]}"; do
-        log_info "브랜치 동기화: $branch"
+        log_info "브랜치 merge: $branch -> dev"
         
-        # 로컬 브랜치가 있는지 확인
-        if git show-ref --verify --quiet refs/heads/"$branch"; then
-            # 로컬 브랜치가 있으면 체크아웃하고 pull
-            git checkout "$branch" 2>/dev/null || {
-                log_warn "브랜치 $branch로 전환할 수 없습니다. 스킵합니다."
-                continue
-            }
-            git pull "$GIT_REMOTE" "$branch" 2>/dev/null || {
-                log_warn "브랜치 $branch pull에 실패했습니다."
-            }
+        # 원격 브랜치 참조 확인
+        REMOTE_BRANCH="${GIT_REMOTE}/${branch}"
+        if git show-ref --verify --quiet "refs/remotes/${REMOTE_BRANCH}"; then
+            # 원격 브랜치를 dev에 merge
+            log_info "원격 브랜치 ${REMOTE_BRANCH}를 dev에 merge합니다..."
+            
+            # merge 실행 (에러 처리를 위해 set -e를 일시적으로 무시)
+            set +e
+            MERGE_OUTPUT=$(git merge --no-edit --no-ff "${REMOTE_BRANCH}" 2>&1)
+            MERGE_STATUS=$?
+            set -e
+            
+            if [ $MERGE_STATUS -eq 0 ]; then
+                log_info "브랜치 $branch merge 성공"
+            elif echo "$MERGE_OUTPUT" | grep -q "Already up to date"; then
+                log_info "브랜치 $branch는 이미 dev에 merge되어 있습니다."
+            elif echo "$MERGE_OUTPUT" | grep -q "merge conflict"; then
+                log_warn "브랜치 $branch merge 중 충돌이 발생했습니다."
+                log_warn "충돌을 해결한 후 수동으로 merge를 완료하세요."
+                # merge 중단
+                git merge --abort 2>/dev/null || true
+            else
+                log_warn "브랜치 $branch merge에 실패했습니다: $MERGE_OUTPUT"
+            fi
         else
-            # 로컬 브랜치가 없으면 원격에서 추적 브랜치 생성
-            log_info "로컬 브랜치가 없습니다. 원격에서 추적 브랜치를 생성합니다: $branch"
-            git checkout -b "$branch" "${GIT_REMOTE}/$branch" 2>/dev/null || {
-                log_warn "브랜치 $branch를 생성할 수 없습니다. 스킵합니다."
-                continue
-            }
+            log_warn "원격 브랜치를 찾을 수 없습니다: ${REMOTE_BRANCH}"
         fi
     done
-    
-    # 다시 dev 브랜치로 돌아가기
-    log_info "dev 브랜치로 돌아갑니다..."
-    git checkout dev || {
-        log_warn "dev 브랜치로 돌아갈 수 없습니다."
-    }
 fi
 
 log_info "동기화 완료!"
