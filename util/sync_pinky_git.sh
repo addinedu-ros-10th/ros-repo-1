@@ -15,6 +15,8 @@ set -euo pipefail
 REPO_ROOT="/home/pinky/ros-repo-1"
 GIT_REMOTE=${GIT_REMOTE:-origin}
 REPO_URL="https://github.com/addinedu-ros-10th/ros-repo-1.git"
+GIT_USER_NAME="GueHoJung88"
+GIT_USER_EMAIL="emotionalmachine88@gmail.com"
 
 # 색상 출력 (선택적)
 RED='\033[0;31m'
@@ -67,6 +69,15 @@ if [ ! -d ".git" ]; then
 fi
 
 log_info "저장소 위치: $REPO_ROOT"
+
+# Git 사용자 정보 설정 (merge를 위해 필요)
+log_info "Git 사용자 정보를 설정합니다..."
+git config user.name "$GIT_USER_NAME" || {
+    log_warn "Git user.name 설정에 실패했습니다."
+}
+git config user.email "$GIT_USER_EMAIL" || {
+    log_warn "Git user.email 설정에 실패했습니다."
+}
 
 # 원격 저장소 정보 업데이트
 log_info "원격 저장소 정보를 가져옵니다..."
