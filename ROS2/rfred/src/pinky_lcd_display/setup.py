@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
 package_name = 'pinky_lcd_display'
 
@@ -12,6 +14,9 @@ setup(
         ('share/' + package_name, ['package.xml']),
         # launch 파일들
         ('share/' + package_name + '/launch', ['launch/lcd_display.launch.py']),
+        # 한글 폰트 파일 설치
+        (os.path.join('share', package_name, 'fonts', 'maruburi', 'TTF'),
+            glob('fonts/maruburi/TTF/*.ttf')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
