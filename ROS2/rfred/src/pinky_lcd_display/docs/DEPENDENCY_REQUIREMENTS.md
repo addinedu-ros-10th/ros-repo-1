@@ -69,10 +69,11 @@ except ImportError:
 
 로봇에서 `pinky_lcd_display` 패키지가 **모든 기능**을 사용하려면 다음 패키지들이 **빌드되어 설치**되어 있어야 합니다:
 
-1. **`pinky_lcd_display_interfaces`** (필수)
-   - 위치: 다른 브랜치에 있음 (예: `SERVER/ros2-server/src/pinky_lcd_display_interfaces`)
+1. **`pinky_lcd_display_interfaces`** (필수) ✅ **통합 완료**
+   - 위치: `ROS2/rfred/src/pinky_lcd_display_interfaces` (현재 브랜치에 포함됨)
    - 역할: 인터페이스 타입 정의
    - 실행: 노드 실행 불필요 (타입 정의만 제공)
+   - **참고**: base/SERVER/ros2-server 브랜치에서 복사하여 통합 완료
 
 2. **`pinky_lcd_display`** (필수)
    - 위치: `ROS2/rfred/src/pinky_lcd_display`
@@ -88,37 +89,22 @@ except ImportError:
 
 ## 설치 및 빌드 방법
 
-### 방법 1: 모든 패키지를 함께 빌드 (권장)
+### 방법 1: 단일 워크스페이스에서 빌드 (권장) ✅ **현재 상태**
 
-```bash
-# 로봇에서 실행
-cd ~/ros-repo-1
-
-# 1. pinky_lcd_display_interfaces 빌드 (다른 브랜치에서)
-cd SERVER/ros2-server
-colcon build --packages-select pinky_lcd_display_interfaces
-source install/setup.bash
-
-# 2. pinky_lcd_display 빌드
-cd ~/ros-repo-1/ROS2/rfred
-colcon build --packages-select pinky_lcd_display
-source install/setup.bash
-```
-
-### 방법 2: 단일 워크스페이스에서 빌드
-
-만약 `pinky_lcd_display_interfaces`를 `ROS2/rfred` 워크스페이스에 복사하거나 심볼릭 링크를 만든다면:
+`pinky_lcd_display_interfaces` 패키지가 `ROS2/rfred` 워크스페이스에 통합되어 있습니다:
 
 ```bash
 # 로봇에서 실행
 cd ~/ros-repo-1/ROS2/rfred
 
-# 모든 패키지 빌드
+# 모든 패키지 빌드 (인터페이스 패키지가 자동으로 먼저 빌드됨)
 colcon build --packages-select pinky_lcd_display_interfaces pinky_lcd_display
 source install/setup.bash
 ```
 
-### 방법 3: 인터페이스 없이 빌드 (기본 기능만)
+**빌드 순서**: `pinky_lcd_display_interfaces`가 자동으로 먼저 빌드됩니다 (의존성 기반).
+
+### 방법 2: 인터페이스 없이 빌드 (기본 기능만)
 
 인터페이스 패키지가 없어도 빌드는 가능하지만, 서비스/액션 기능은 사용할 수 없습니다:
 
@@ -126,6 +112,8 @@ source install/setup.bash
 # 경고가 발생하지만 빌드는 됩니다
 colcon build --packages-select pinky_lcd_display
 ```
+
+**참고**: 현재 브랜치에는 `pinky_lcd_display_interfaces` 패키지가 포함되어 있으므로, 이 방법은 사용하지 않습니다.
 
 ## 실행 방법
 
@@ -246,31 +234,31 @@ ERROR: Could not find a package configuration file provided by "pinky_lcd_displa
 
 ## 권장 설치 구조
 
-### 로봇에 설치할 패키지
+### 로봇에 설치할 패키지 ✅ **현재 구조**
 
 ```
-/home/pinky/ros-repo-1/
-├── SERVER/ros2-server/
-│   └── src/
-│       └── pinky_lcd_display_interfaces/  # 인터페이스 정의 (필수)
-│
-└── ROS2/rfred/
-    └── src/
-        └── pinky_lcd_display/  # LCD 제어 노드 (필수)
+/home/pinky/ros-repo-1/ROS2/rfred/
+└── src/
+    ├── pinky_lcd_display_interfaces/  # 인터페이스 정의 (필수) ✅ 통합 완료
+    └── pinky_lcd_display/              # LCD 제어 노드 (필수)
 ```
 
 ### 빌드 순서
 
-1. **먼저 빌드**: `pinky_lcd_display_interfaces`
-2. **나중에 빌드**: `pinky_lcd_display`
+1. **먼저 빌드**: `pinky_lcd_display_interfaces` (자동으로 먼저 빌드됨)
+2. **나중에 빌드**: `pinky_lcd_display` (의존성 기반 자동 처리)
 
 ### 실행
 
 ```bash
 # 로봇에서
 cd ~/ros-repo-1/ROS2/rfred
+colcon build --packages-select pinky_lcd_display_interfaces pinky_lcd_display
 source install/setup.bash
 ros2 run pinky_lcd_display lcd_node
+
+# 또는 launch 파일 사용
+ros2 launch pinky_lcd_display lcd_display.launch.py
 ```
 
 ## 요약
@@ -288,9 +276,10 @@ ros2 run pinky_lcd_display lcd_node
    - Python에서 import하기 위해 설치되어 있어야 합니다
    - 없어도 기본 토픽 구독 기능은 동작합니다
 
-4. **로봇에 설치해야 합니다**
-   - 인터페이스 패키지를 로봇의 워크스페이스에 복사하거나
-   - 빌드된 `install/` 디렉토리를 로봇에 복사해야 합니다
+4. **로봇에 설치해야 합니다** ✅ **통합 완료**
+   - 인터페이스 패키지가 현재 브랜치에 통합되어 있음
+   - 로봇에 한 번에 설치 가능
+   - 빌드 시 자동으로 인터페이스 패키지 먼저 빌드됨
 
 ### 최소 요구사항
 
