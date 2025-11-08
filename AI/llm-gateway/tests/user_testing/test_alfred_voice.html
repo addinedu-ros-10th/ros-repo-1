@@ -327,6 +327,139 @@
             margin-top: 5px;
         }
         
+        .debug-panel {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .debug-panel h3 {
+            margin-bottom: 15px;
+            color: #856404;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .debug-panel h3:hover {
+            color: #ffc107;
+        }
+        
+        .debug-content {
+            display: none;
+        }
+        
+        .debug-content.active {
+            display: block;
+        }
+        
+        .debug-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        
+        .debug-section h4 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .debug-section select,
+        .debug-section input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .voiceprint-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            background: #f8f9fa;
+        }
+        
+        .voiceprint-item {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+            background: white;
+            border: 1px solid #ddd;
+            font-size: 12px;
+        }
+        
+        .voiceprint-item.matched {
+            background: #d4edda;
+            border-color: #28a745;
+            border-width: 2px;
+        }
+        
+        .voiceprint-item.matched::before {
+            content: "✓ ";
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .stt-display {
+            min-height: 60px;
+            padding: 10px;
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .stt-interim {
+            color: #666;
+            font-style: italic;
+        }
+        
+        .stt-final {
+            color: #333;
+            font-weight: normal;
+        }
+        
+        .match-info {
+            padding: 10px;
+            background: #e7f3ff;
+            border: 1px solid #007bff;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        
+        .match-info.active {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        
+        .similarity-display {
+            font-size: 16px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .similarity-display.high {
+            color: #28a745;
+        }
+        
+        .similarity-display.medium {
+            color: #ffc107;
+        }
+        
+        .similarity-display.low {
+            color: #dc3545;
+        }
+        
         .audio-level-meter {
             background: #f8f9fa;
             padding: 20px;
@@ -470,10 +603,106 @@
             <span id="warningText" style="display: none; color: #dc3545; font-weight: bold; margin-left: 10px;"></span>
         </div>
         
+        <!-- 개발용 디버깅 패널 -->
+        <div class="debug-panel">
+            <h3 onclick="toggleDebugPanel()">🔧 개발자 디버깅 패널</h3>
+            <div class="debug-content" id="debugContent">
+                <!-- STT 모델 선택 -->
+                <div class="debug-section">
+                    <h4>1. STT 모델 선택</h4>
+                    <select id="sttModelSelect" onchange="onSTTModelChange()">
+                        <option value="browser" selected>브라우저 STT (기본)</option>
+                        <option value="whisper">OpenAI Whisper</option>
+                    </select>
+                    <div class="description" style="font-size: 12px; color: #666;">
+                        브라우저 STT: 실시간 키워드 감지용<br>
+                        OpenAI Whisper: 고정밀 STT (녹음 후 처리)
+                    </div>
+                </div>
+                
+                <!-- 키워드 선택 -->
+                <div class="debug-section">
+                    <h4>2. 매칭 대상 키워드 선택</h4>
+                    <select id="keywordSelect" onchange="onKeywordChange()">
+                        <option value="alfred" selected>alfred (기본)</option>
+                    </select>
+                    <button onclick="loadKeywords()" style="margin-top: 5px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">키워드 목록 새로고침</button>
+                </div>
+                
+                <!-- 음성 지문 목록 -->
+                <div class="debug-section">
+                    <h4>3. 음성 지문 목록 (<span id="voiceprintListCount">0</span>개)</h4>
+                    <div class="voiceprint-list" id="voiceprintList">
+                        <div style="text-align: center; color: #666; padding: 20px;">로딩 중...</div>
+                    </div>
+                    <button onclick="loadVoiceprints()" style="margin-top: 10px; padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">목록 새로고침</button>
+                </div>
+                
+                <!-- STT 결과 실시간 표시 -->
+                <div class="debug-section">
+                    <h4>4. STT 결과 실시간 표시</h4>
+                    <div class="stt-display" id="sttDisplay">
+                        <div class="stt-interim" id="sttInterim">인식 중인 텍스트가 여기에 표시됩니다...</div>
+                        <div class="stt-final" id="sttFinal">최종 인식된 텍스트가 여기에 표시됩니다...</div>
+                    </div>
+                </div>
+                
+                <!-- 매칭 정보 -->
+                <div class="debug-section">
+                    <h4>5. 키워드 매칭 정보</h4>
+                    <div class="match-info" id="matchInfo">
+                        <div>매칭 상태: <span id="matchStatus">대기 중</span></div>
+                        <div style="margin-top: 5px;">매칭된 키워드: <span id="matchedKeyword">-</span></div>
+                        <div style="margin-top: 5px;">매칭된 음성 지문 ID: <span id="matchedVoiceprintId">-</span></div>
+                    </div>
+                </div>
+                
+                <!-- 유사도 표시 -->
+                <div class="debug-section">
+                    <h4>6. 유사도 정보</h4>
+                    <div>
+                        <div>STT 결과: <span id="debugSTTResult">-</span></div>
+                        <div style="margin-top: 5px;">기준 키워드: <span id="debugBaseKeyword">alfred</span></div>
+                        <div style="margin-top: 5px;">유사도: <span class="similarity-display" id="debugSimilarity">-</span></div>
+                        <div style="margin-top: 5px; font-size: 12px; color: #666;">
+                            유사도 기준: 0.7 이상 = 높음 (녹색), 0.5-0.7 = 중간 (노란색), 0.5 미만 = 낮음 (빨간색)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 사용자 및 세션 관리 패널 -->
+        <div class="session-panel" style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+            <h4 style="margin-bottom: 10px; color: #333;">👤 사용자 및 세션 관리</h4>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+                <div>
+                    <label style="font-size: 12px; color: #666;">USER ID:</label>
+                    <input type="text" id="userIdInput" style="padding: 5px 10px; border: 1px solid #ddd; border-radius: 5px; width: 150px;" placeholder="자동 생성" onchange="onUserIdChange()" onblur="onUserIdChange()">
+                    <button onclick="generateUserId()" style="padding: 5px 10px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 5px;">생성</button>
+                </div>
+                <div>
+                    <label style="font-size: 12px; color: #666;">Session ID:</label>
+                    <select id="sessionIdSelect" style="padding: 5px 10px; border: 1px solid #ddd; border-radius: 5px; width: 200px;" onchange="onSessionIdChange()">
+                        <option value="">새 세션 생성</option>
+                    </select>
+                    <button onclick="createNewSession()" style="padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 5px;">신규</button>
+                </div>
+                <div>
+                    <button onclick="loadSessionHistory()" style="padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">세션 히스토리 로드</button>
+                </div>
+            </div>
+            <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                <strong>현재:</strong> USER ID: <span id="currentUserId">-</span> | Session ID: <span id="currentSessionId">-</span>
+            </div>
+        </div>
+        
         <div class="controls">
             <button class="btn-start" id="startBtn" onclick="startListening()">🎤 시작</button>
             <button class="btn-stop" id="stopBtn" onclick="stopListening()" disabled>⏹️ 중지</button>
             <button class="btn-reset" onclick="resetConversation()">🔄 대화 초기화</button>
+            <button class="btn-info" onclick="downloadConversation()" style="background: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">💾 대화 다운로드</button>
+            <button class="btn-info" onclick="downloadKeywordAttempts()" style="background: #ffc107; color: #333; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">📋 키워드 시도 목록 다운로드</button>
         </div>
         
         <div class="conversation" id="conversation"></div>
@@ -495,17 +724,28 @@
 
     <script>
         const API_BASE_URL = 'http://localhost:8000';
-        const KEYWORD = 'alfred';
+        let KEYWORD = 'alfred'; // 동적으로 변경 가능하도록 let으로 변경
         
         let recognition = null;
         let isListening = false;
         let sessionActive = false;
         let currentAudio = null;
-        let conversationHistory = [];
-        let sessionId = 'alfred_' + Date.now();
+        let conversationHistory = []; // 현재 세션의 대화 히스토리
         let lastDetectedKeyword = null; // 마지막 감지된 키워드 STT 결과 저장
         let keywordAudioBuffer = null; // 키워드 감지 시점의 오디오 버퍼
         let voiceprintCount = 0; // 등록된 음성 지문 개수
+        
+        // 디버깅 관련 변수
+        let currentSTTModel = 'browser'; // 'browser' or 'whisper'
+        let voiceprints = []; // 현재 키워드의 음성 지문 목록
+        let matchedVoiceprintId = null; // 매칭된 음성 지문 ID
+        
+        // 사용자 및 세션 관리 변수
+        let userId = null; // 현재 사용자 ID
+        let sessionId = 'alfred_' + Date.now(); // 현재 세션 ID (기존 변수 재사용)
+        let keywordAttempts = []; // 키워드 시도 목록 [{timestamp, stt_result, matched, similarity, base_keyword}]
+        let userSessions = {}; // USER ID별 Session ID 목록 {userId: [sessionId1, sessionId2, ...]}
+        let sessionHistories = {}; // Session ID별 대화 히스토리 {sessionId: [{role, text, timestamp}]}
         
         // 활성화 시간 관리
         let activationTimer = null; // 활성화 유지 타이머
@@ -563,6 +803,9 @@
                     }
                 }
                 
+                // 디버깅: STT 결과 실시간 표시
+                updateSTTDisplay(interimTranscript.trim(), finalTranscript.trim());
+                
                 // 키워드 감지: 서버 API를 통해 확인
                 const fullText = (interimTranscript + ' ' + finalTranscript).toLowerCase().trim();
                 
@@ -576,6 +819,8 @@
                     if (!sessionActive && isListening) {
                         // 세션이 비활성화 상태일 때만 키워드 확인
                         console.log('키워드 후보 감지:', fullText);
+                        // 키워드 시도 기록
+                        recordKeywordAttempt(fullText, KEYWORD, false, 0);
                         checkKeywordWithServer(fullText);
                     } else if (sessionActive) {
                         // 활성화 상태일 때는 키워드를 무시하고 연속 대화 가능
@@ -649,8 +894,14 @@
                 
                 const data = await response.json();
                 
+                // 디버깅: 유사도 정보 업데이트
+                updateSimilarityInfo(sttResult, KEYWORD, data.similarity || 0);
+                
                 if (data.is_keyword && data.activate) {
                     console.log('키워드 확인됨:', data.matched_keyword, '유사도:', data.similarity);
+                    
+                    // 키워드 시도 기록 (성공)
+                    recordKeywordAttempt(sttResult, KEYWORD, true, data.similarity || 1.0);
                     
                     // 마지막 감지된 키워드 저장
                     lastDetectedKeyword = {
@@ -663,6 +914,9 @@
                     // 유사도 표시
                     showSimilarity(data.similarity || 1.0);
                     
+                    // 디버깅: 매칭 정보 업데이트
+                    updateMatchInfo(true, data.matched_keyword, data.voiceprint_id, data.similarity || 1.0);
+                    
                     // 키워드 활성화 처리
                     activateKeyword(data.matched_keyword, sttResult, data.voiceprint_id);
                     
@@ -670,14 +924,24 @@
                     // 현재 구조에서는 키워드 감지 후 첫 질문 녹음 시 음성 지문 등록
                 } else {
                     console.log('키워드 매칭 실패:', sttResult, '유사도:', data.similarity || 0);
+                    // 키워드 시도 기록 (실패)
+                    recordKeywordAttempt(sttResult, KEYWORD, false, data.similarity || 0);
                     lastDetectedKeyword = null;
                     hideSimilarity();
+                    
+                    // 디버깅: 매칭 실패 정보 업데이트
+                    updateMatchInfo(false, null, null, data.similarity || 0);
                 }
             } catch (error) {
                 console.error('키워드 확인 오류:', error);
+                // 디버깅: 에러 정보 업데이트
+                updateMatchInfo(false, null, null, 0);
+                updateSimilarityInfo(sttResult, KEYWORD, 0);
+                
                 // 서버 오류 시 기본 키워드 매칭으로 폴백
                 if (sttResult.includes(KEYWORD)) {
                     activateKeyword(KEYWORD, sttResult);
+                    updateMatchInfo(true, KEYWORD, null, 1.0);
                 }
             }
         }
@@ -1141,10 +1405,16 @@
                 
                 if (data.success) {
                     // 사용자 질문 표시
-                    addMessage('user', data.user_text || '질문');
+                    const userText = data.user_text || '질문';
+                    addMessage('user', userText);
                     
                     // AI 응답 표시
-                    addMessage('assistant', data.assistant_text);
+                    const assistantText = data.assistant_text;
+                    addMessage('assistant', assistantText);
+                    
+                    // 대화 히스토리 저장 (세션별로 관리)
+                    saveConversationMessage('user', userText);
+                    saveConversationMessage('assistant', assistantText);
                     
                     // 키워드 감지 후 첫 질문이면 음성 지문 등록 시도
                     if (lastDetectedKeyword) {
@@ -1333,6 +1603,214 @@
             conversation.scrollTop = conversation.scrollHeight;
         }
         
+        // 세션별 대화 히스토리 표시
+        function displayConversationHistory() {
+            const conversation = document.getElementById('conversation');
+            conversation.innerHTML = ''; // 기존 대화 초기화
+            
+            if (sessionHistories[sessionId] && sessionHistories[sessionId].length > 0) {
+                sessionHistories[sessionId].forEach(msg => {
+                    addMessage(msg.role, msg.text);
+                });
+            }
+        }
+        
+        // 대화 메시지 저장 (세션별)
+        function saveConversationMessage(role, text) {
+            if (!sessionHistories[sessionId]) {
+                sessionHistories[sessionId] = [];
+            }
+            
+            sessionHistories[sessionId].push({
+                role: role,
+                text: text,
+                timestamp: new Date().toISOString()
+            });
+            
+            // USER ID별 세션 목록 업데이트
+            if (userId) {
+                if (!userSessions[userId]) {
+                    userSessions[userId] = [];
+                }
+                if (!userSessions[userId].includes(sessionId)) {
+                    userSessions[userId].push(sessionId);
+                }
+            }
+        }
+        
+        // 키워드 시도 기록
+        function recordKeywordAttempt(sttResult, baseKeyword, matched, similarity) {
+            keywordAttempts.push({
+                timestamp: new Date().toISOString(),
+                stt_result: sttResult,
+                base_keyword: baseKeyword,
+                matched: matched,
+                similarity: similarity,
+                session_id: sessionId,
+                user_id: userId
+            });
+        }
+        
+        // USER ID 변경
+        function onUserIdChange() {
+            const inputUserId = document.getElementById('userIdInput').value.trim();
+            if (inputUserId && inputUserId !== userId) {
+                userId = inputUserId;
+                updateCurrentUserSession();
+                updateSessionSelect();
+            }
+        }
+        
+        // USER ID 생성
+        function generateUserId() {
+            userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            document.getElementById('userIdInput').value = userId;
+            updateCurrentUserSession();
+            
+            // 새 세션 생성
+            createNewSession();
+        }
+        
+        // 새 세션 생성
+        function createNewSession() {
+            if (!userId) {
+                generateUserId(); // USER ID가 없으면 자동 생성
+            }
+            
+            sessionId = 'alfred_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            
+            // 세션 히스토리 초기화
+            if (!sessionHistories[sessionId]) {
+                sessionHistories[sessionId] = [];
+            }
+            
+            // 대화 UI 초기화
+            document.getElementById('conversation').innerHTML = '';
+            
+            // 세션 선택 목록 업데이트
+            updateSessionSelect();
+            updateCurrentUserSession();
+        }
+        
+        // 세션 ID 변경
+        function onSessionIdChange() {
+            const select = document.getElementById('sessionIdSelect');
+            const selectedSessionId = select.value;
+            
+            if (selectedSessionId) {
+                sessionId = selectedSessionId;
+                updateCurrentUserSession();
+                displayConversationHistory();
+            }
+        }
+        
+        // 세션 선택 목록 업데이트
+        function updateSessionSelect() {
+            const select = document.getElementById('sessionIdSelect');
+            const currentValue = select.value || sessionId;
+            
+            select.innerHTML = '<option value="">새 세션 생성</option>';
+            
+            if (userId && userSessions[userId]) {
+                userSessions[userId].forEach(sid => {
+                    const selected = sid === currentValue ? 'selected' : '';
+                    const date = new Date(parseInt(sid.split('_')[1])).toLocaleString('ko-KR');
+                    select.innerHTML += `<option value="${sid}" ${selected}>${sid} (${date})</option>`;
+                });
+            }
+            
+            // 현재 세션도 추가 (목록에 없으면)
+            if (sessionId && (!userId || !userSessions[userId] || !userSessions[userId].includes(sessionId))) {
+                const date = new Date(parseInt(sessionId.split('_')[1])).toLocaleString('ko-KR');
+                select.innerHTML += `<option value="${sessionId}" selected>${sessionId} (${date})</option>`;
+            }
+        }
+        
+        // 세션 히스토리 로드
+        function loadSessionHistory() {
+            const inputUserId = document.getElementById('userIdInput').value.trim();
+            
+            if (!inputUserId) {
+                alert('USER ID를 입력하거나 생성해주세요.');
+                return;
+            }
+            
+            userId = inputUserId;
+            updateCurrentUserSession();
+            updateSessionSelect();
+            
+            // 현재 세션의 히스토리 표시
+            displayConversationHistory();
+            
+            alert(`USER ID "${userId}"의 세션 히스토리를 로드했습니다.`);
+        }
+        
+        // 현재 USER ID와 Session ID UI 업데이트
+        function updateCurrentUserSession() {
+            document.getElementById('currentUserId').textContent = userId || '-';
+            document.getElementById('currentSessionId').textContent = sessionId || '-';
+            
+            if (userId) {
+                document.getElementById('userIdInput').value = userId;
+            }
+        }
+        
+        // 대화 내용 다운로드
+        function downloadConversation() {
+            if (!sessionHistories[sessionId] || sessionHistories[sessionId].length === 0) {
+                alert('다운로드할 대화 내용이 없습니다.');
+                return;
+            }
+            
+            const history = sessionHistories[sessionId];
+            const data = {
+                user_id: userId,
+                session_id: sessionId,
+                created_at: new Date().toISOString(),
+                messages: history
+            };
+            
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `conversation_${userId}_${sessionId}_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // 키워드 시도 목록 다운로드
+        function downloadKeywordAttempts() {
+            if (keywordAttempts.length === 0) {
+                alert('다운로드할 키워드 시도 기록이 없습니다.');
+                return;
+            }
+            
+            const data = {
+                user_id: userId,
+                session_id: sessionId,
+                created_at: new Date().toISOString(),
+                total_attempts: keywordAttempts.length,
+                successful_attempts: keywordAttempts.filter(a => a.matched).length,
+                failed_attempts: keywordAttempts.filter(a => !a.matched).length,
+                attempts: keywordAttempts
+            };
+            
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `keyword_attempts_${userId}_${sessionId}_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
         // 상태 업데이트
         function updateStatus(status, message) {
             const statusBar = document.getElementById('statusBar');
@@ -1423,7 +1901,9 @@
         function resetConversation() {
             conversationHistory = [];
             document.getElementById('conversation').innerHTML = '';
-            sessionId = 'alfred_' + Date.now();
+            
+            // 새 세션 생성 (기존 세션 히스토리는 유지)
+            createNewSession();
             
             if (currentAudio) {
                 currentAudio.pause();
@@ -1437,10 +1917,224 @@
             document.getElementById('keywordStatus').textContent = '대기 중';
             document.getElementById('keywordIndicator').classList.remove('active');
             hideSimilarity();
-            updateStatus('waiting', '대화가 초기화되었습니다.');
+            updateStatus('waiting', '대화가 초기화되었습니다. 새 세션이 생성되었습니다.');
         }
         
         // 페이지 로드 시 설정 패널 기본값 설정
+        // ============= 개발자 디버깅 함수 =============
+        
+        // 디버깅 패널 토글
+        function toggleDebugPanel() {
+            const content = document.getElementById('debugContent');
+            content.classList.toggle('active');
+        }
+        
+        // STT 모델 변경
+        function onSTTModelChange() {
+            currentSTTModel = document.getElementById('sttModelSelect').value;
+            console.log('STT 모델 변경:', currentSTTModel);
+            // TODO: 실제 STT 모델 변경 로직 구현 (현재는 브라우저 STT만 사용)
+        }
+        
+        // 키워드 변경
+        function onKeywordChange() {
+            const select = document.getElementById('keywordSelect');
+            KEYWORD = select.value;
+            console.log('키워드 변경:', KEYWORD);
+            document.getElementById('debugBaseKeyword').textContent = KEYWORD;
+            // 음성 지문 목록 다시 로드
+            loadVoiceprints();
+        }
+        
+        // 키워드 목록 로드 (DB에서 등록된 키워드 목록 가져오기)
+        async function loadKeywords() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/keyword/voiceprint`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                if (data.success && data.voiceprints) {
+                    // 고유한 base_keyword 목록 추출
+                    const uniqueKeywords = [...new Set(data.voiceprints.map(vp => vp.base_keyword))];
+                    
+                    const select = document.getElementById('keywordSelect');
+                    const currentValue = select.value;
+                    
+                    // 옵션 초기화 (기본값 제외)
+                    select.innerHTML = '';
+                    
+                    // 기본값 추가
+                    if (!uniqueKeywords.includes('alfred')) {
+                        select.innerHTML += '<option value="alfred" selected>alfred (기본)</option>';
+                    }
+                    
+                    // DB에서 가져온 키워드 추가
+                    uniqueKeywords.forEach(keyword => {
+                        const selected = keyword === currentValue ? 'selected' : '';
+                        select.innerHTML += `<option value="${keyword}" ${selected}>${keyword}</option>`;
+                    });
+                    
+                    // 현재 선택된 값으로 키워드 업데이트
+                    if (currentValue) {
+                        KEYWORD = currentValue;
+                        document.getElementById('debugBaseKeyword').textContent = KEYWORD;
+                    }
+                    
+                    console.log('키워드 목록 로드 완료:', uniqueKeywords);
+                }
+            } catch (error) {
+                console.error('키워드 목록 로드 실패:', error);
+                alert('키워드 목록을 불러오는데 실패했습니다: ' + error.message);
+            }
+        }
+        
+        // 음성 지문 목록 로드
+        async function loadVoiceprints() {
+            try {
+                const select = document.getElementById('keywordSelect');
+                const selectedKeyword = select ? select.value : KEYWORD;
+                
+                const response = await fetch(`${API_BASE_URL}/api/keyword/voiceprint?base_keyword=${selectedKeyword}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                if (data.success && data.voiceprints) {
+                    voiceprints = data.voiceprints;
+                    const listDiv = document.getElementById('voiceprintList');
+                    const countSpan = document.getElementById('voiceprintListCount');
+                    
+                    countSpan.textContent = voiceprints.length;
+                    
+                    if (voiceprints.length === 0) {
+                        listDiv.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">등록된 음성 지문이 없습니다.</div>';
+                    } else {
+                        listDiv.innerHTML = voiceprints.map(vp => {
+                            const matched = matchedVoiceprintId === vp.id ? 'matched' : '';
+                            return `
+                                <div class="voiceprint-item ${matched}" id="vp-${vp.id}">
+                                    <strong>ID:</strong> ${vp.id} | 
+                                    <strong>STT 키워드:</strong> ${vp.stt_keyword} | 
+                                    <strong>오디오:</strong> ${vp.has_audio ? '있음' : '없음'} | 
+                                    <strong>생성일:</strong> ${new Date(vp.created_at).toLocaleString('ko-KR')}
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                    
+                    console.log('음성 지문 목록 로드 완료:', voiceprints.length, '개');
+                }
+            } catch (error) {
+                console.error('음성 지문 목록 로드 실패:', error);
+                const listDiv = document.getElementById('voiceprintList');
+                listDiv.innerHTML = '<div style="text-align: center; color: #dc3545; padding: 20px;">로드 실패: ' + error.message + '</div>';
+            }
+        }
+        
+        // STT 결과 업데이트 (실시간)
+        function updateSTTDisplay(interimText, finalText) {
+            const interimDiv = document.getElementById('sttInterim');
+            const finalDiv = document.getElementById('sttFinal');
+            
+            if (interimDiv) {
+                if (interimText) {
+                    interimDiv.textContent = '인식 중: ' + interimText;
+                    interimDiv.style.display = 'block';
+                } else {
+                    interimDiv.style.display = 'none';
+                }
+            }
+            
+            if (finalDiv) {
+                if (finalText) {
+                    finalDiv.textContent = '최종 인식: ' + finalText;
+                    finalDiv.style.display = 'block';
+                } else {
+                    finalDiv.style.display = 'none';
+                }
+            }
+        }
+        
+        // 매칭 정보 업데이트
+        function updateMatchInfo(isMatched, matchedKeyword, voiceprintId, similarity) {
+            const matchInfo = document.getElementById('matchInfo');
+            const matchStatus = document.getElementById('matchStatus');
+            const matchedKeywordSpan = document.getElementById('matchedKeyword');
+            const matchedVoiceprintIdSpan = document.getElementById('matchedVoiceprintId');
+            
+            if (isMatched) {
+                matchInfo.classList.add('active');
+                matchStatus.textContent = '매칭 성공';
+                matchedKeywordSpan.textContent = matchedKeyword || '-';
+                matchedVoiceprintIdSpan.textContent = voiceprintId || '-';
+                matchedVoiceprintId = voiceprintId;
+                
+                // 매칭된 음성 지문 하이라이트
+                voiceprints.forEach(vp => {
+                    const item = document.getElementById(`vp-${vp.id}`);
+                    if (item) {
+                        if (vp.id === voiceprintId) {
+                            item.classList.add('matched');
+                        } else {
+                            item.classList.remove('matched');
+                        }
+                    }
+                });
+            } else {
+                matchInfo.classList.remove('active');
+                matchStatus.textContent = '매칭 실패 또는 대기 중';
+                matchedKeywordSpan.textContent = '-';
+                matchedVoiceprintIdSpan.textContent = '-';
+                matchedVoiceprintId = null;
+                
+                // 모든 하이라이트 제거
+                voiceprints.forEach(vp => {
+                    const item = document.getElementById(`vp-${vp.id}`);
+                    if (item) {
+                        item.classList.remove('matched');
+                    }
+                });
+            }
+        }
+        
+        // 유사도 정보 업데이트
+        function updateSimilarityInfo(sttResult, baseKeyword, similarity) {
+            const sttResultSpan = document.getElementById('debugSTTResult');
+            const baseKeywordSpan = document.getElementById('debugBaseKeyword');
+            const similaritySpan = document.getElementById('debugSimilarity');
+            
+            if (sttResultSpan) {
+                sttResultSpan.textContent = sttResult || '-';
+            }
+            
+            if (baseKeywordSpan) {
+                baseKeywordSpan.textContent = baseKeyword || KEYWORD;
+            }
+            
+            if (similaritySpan && similarity !== undefined && similarity !== null) {
+                const similarityPercent = (similarity * 100).toFixed(1);
+                similaritySpan.textContent = `${similarityPercent}% (${similarity.toFixed(3)})`;
+                
+                // 유사도에 따른 색상 변경
+                similaritySpan.classList.remove('high', 'medium', 'low');
+                if (similarity >= 0.7) {
+                    similaritySpan.classList.add('high');
+                } else if (similarity >= 0.5) {
+                    similaritySpan.classList.add('medium');
+                } else {
+                    similaritySpan.classList.add('low');
+                }
+            } else {
+                if (similaritySpan) {
+                    similaritySpan.textContent = '-';
+                    similaritySpan.classList.remove('high', 'medium', 'low');
+                }
+            }
+        }
+        
         window.addEventListener('DOMContentLoaded', () => {
             // 설정 값 localStorage에서 불러오기 (선택사항)
             const savedRecordingDuration = localStorage.getItem('recordingDuration');
@@ -1476,6 +2170,17 @@
             document.getElementById('activationDuration').addEventListener('change', (e) => {
                 localStorage.setItem('activationDuration', e.target.value);
             });
+            
+            // 디버깅 패널 초기화
+            loadKeywords();
+            loadVoiceprints();
+            
+            // 사용자 및 세션 초기화
+            if (!userId) {
+                generateUserId(); // 자동으로 USER ID 생성
+            }
+            updateCurrentUserSession();
+            updateSessionSelect();
         });
     </script>
 </body>
