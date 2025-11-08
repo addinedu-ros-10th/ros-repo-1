@@ -1,0 +1,15 @@
+# Goal
+string text                     # 스크롤할 텍스트
+uint32 scroll_speed_ms          # 스크롤 속도 (밀리초)
+uint8 direction                 # 0: LEFT, 1: RIGHT, 2: UP, 3: DOWN
+uint32 repeat_count             # 반복 횟수 (0이면 무한)
+---
+# Result
+bool success
+string message
+uint32 total_scroll_time_ms
+---
+# Feedback
+uint32 current_position         # 현재 스크롤 위치
+uint8 progress_percent
+
