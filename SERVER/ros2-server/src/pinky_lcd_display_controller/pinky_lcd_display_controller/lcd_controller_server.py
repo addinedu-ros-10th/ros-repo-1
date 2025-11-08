@@ -13,6 +13,7 @@ from pinky_lcd_display_interfaces.srv import SetDisplay, SetStyle, ClearDisplay,
 from pinky_lcd_display_interfaces.action import SetDisplay as SetDisplayAction
 from pinky_lcd_display_interfaces.action import ScrollText
 import os
+import time
 from ament_index_python.packages import get_package_share_directory
 
 
@@ -177,7 +178,14 @@ class LCDControllerServer(Node):
             if self.set_display_client.wait_for_service(timeout_sec=1.0):
                 self.get_logger().debug('Calling SetDisplay service on pinky_lcd_display')
                 future = self.set_display_client.call_async(request)
-                rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+                
+                # 짧은 시간 동안 폴링 (데드락 방지)
+                # spin_until_future_complete는 서비스 콜백 내부에서 데드락을 일으킬 수 있음
+                timeout_sec = 5.0  # 타임아웃 증가 (LCD 렌더링 시간 고려)
+                start_time = time.time()
+                
+                while not future.done() and (time.time() - start_time) < timeout_sec:
+                    rclpy.spin_once(self, timeout_sec=0.1)  # 짧은 시간만 스핀
                 
                 if future.done():
                     service_response = future.result()
@@ -185,7 +193,8 @@ class LCDControllerServer(Node):
                     response.message = service_response.message
                     self.get_logger().info(f"SetDisplay service call successful: {response.message}")
                 else:
-                    self.get_logger().warn("SetDisplay service call timeout, falling back to topic")
+                    elapsed = time.time() - start_time
+                    self.get_logger().warn(f"SetDisplay service call timeout after {elapsed:.2f}s, falling back to topic")
                     self._fallback_to_topic_set_display(request, response)
             else:
                 self.get_logger().warn("SetDisplay service not available, falling back to topic")
@@ -209,7 +218,13 @@ class LCDControllerServer(Node):
             if self.set_style_client.wait_for_service(timeout_sec=1.0):
                 self.get_logger().debug('Calling SetStyle service on pinky_lcd_display')
                 future = self.set_style_client.call_async(request)
-                rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+                
+                # 짧은 시간 동안 폴링 (데드락 방지)
+                timeout_sec = 5.0  # 타임아웃 증가
+                start_time = time.time()
+                
+                while not future.done() and (time.time() - start_time) < timeout_sec:
+                    rclpy.spin_once(self, timeout_sec=0.1)
                 
                 if future.done():
                     service_response = future.result()
@@ -217,9 +232,10 @@ class LCDControllerServer(Node):
                     response.message = service_response.message
                     self.get_logger().info(f"SetStyle service call successful: {response.message}")
                 else:
+                    elapsed = time.time() - start_time
                     response.success = False
-                    response.message = "SetStyle service call timeout"
-                    self.get_logger().warn("SetStyle service call timeout")
+                    response.message = f"SetStyle service call timeout after {elapsed:.2f}s"
+                    self.get_logger().warn(response.message)
             else:
                 response.success = False
                 response.message = "SetStyle service not available"
@@ -272,7 +288,13 @@ class LCDControllerServer(Node):
             if self.clear_display_client.wait_for_service(timeout_sec=1.0):
                 self.get_logger().debug('Calling ClearDisplay service on pinky_lcd_display')
                 future = self.clear_display_client.call_async(request)
-                rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+                
+                # 짧은 시간 동안 폴링 (데드락 방지)
+                timeout_sec = 5.0  # 타임아웃 증가
+                start_time = time.time()
+                
+                while not future.done() and (time.time() - start_time) < timeout_sec:
+                    rclpy.spin_once(self, timeout_sec=0.1)
                 
                 if future.done():
                     service_response = future.result()
@@ -280,7 +302,8 @@ class LCDControllerServer(Node):
                     response.message = service_response.message
                     self.get_logger().info(f"ClearDisplay service call successful: {response.message}")
                 else:
-                    self.get_logger().warn("ClearDisplay service call timeout, falling back to topic")
+                    elapsed = time.time() - start_time
+                    self.get_logger().warn(f"ClearDisplay service call timeout after {elapsed:.2f}s, falling back to topic")
                     self._fallback_to_topic_clear_display(request, response)
             else:
                 self.get_logger().warn("ClearDisplay service not available, falling back to topic")
