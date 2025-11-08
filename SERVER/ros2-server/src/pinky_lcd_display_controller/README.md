@@ -164,7 +164,16 @@ ros2 topic pub --rate 1 /lcd/status std_msgs/msg/String "{data: 'Status\nTime: $
 
 - [개발 현황 리포트](docs/DEVELOPMENT_REPORT.md) - 프로젝트 개발 현황 및 통신 방식 분석
 - [인터페이스 확장 제안서](docs/INTERFACE_PROPOSAL.md) - 향후 개발을 위한 인터페이스 제안
+- [한글 폰트 패치 가이드](docs/KOREAN_FONT_PATCH_GUIDE.md) - 로봇에 한글 폰트 지원 추가 방법
 - [빠른 시작 가이드](docs/QUICK_START.md) - 빠른 시작을 위한 가이드
 - [사용 가이드](docs/PINKY_LCD_DISPLAY_USAGE.md) - 상세 사용 방법
 - [개발 요약](docs/SUMMARY.md) - 개발 작업 요약
+
+## 한글 폰트 지원
+
+이 패키지는 한글 폰트 파일을 포함하고 있지만, **실제 한글 표시를 위해서는 `pinky_lcd_display` 패키지에 패치가 필요합니다.**
+
+자세한 패치 방법은 [한글 폰트 패치 가이드](docs/KOREAN_FONT_PATCH_GUIDE.md)를 참조하세요.
+
+**중요**: `pinky_lcd_display_controller`는 단순히 토픽에 메시지를 발행하는 역할만 하며, 실제 폰트 렌더링은 로봇에 설치된 `pinky_lcd_display` 패키지에서 이루어집니다.
 
