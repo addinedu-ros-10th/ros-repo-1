@@ -6,6 +6,8 @@ Pinky 로봇의 LCD 디스플레이를 ROS2 토픽을 통해 제어하는 패키
 
 이 패키지는 `/lcd/status` 토픽을 구독하여 LCD 디스플레이에 텍스트 정보를 표시합니다. 한글 폰트를 지원하여 한글 텍스트도 정상적으로 표시할 수 있습니다.
 
+**인터페이스 통합**: `pinky_lcd_display_interfaces` 패키지를 통해 서비스, 액션, 토픽 인터페이스를 제공합니다. `pinky_lcd_display_controller`가 클라이언트로 동작하고, 이 패키지가 서버로 동작합니다.
+
 ## 패키지 구조
 
 ```
@@ -16,7 +18,11 @@ pinky_lcd_display/
 ├── LICENSE
 ├── README.md
 ├── docs/                          # 문서 디렉토리
-│   └── DEVELOPMENT_STATUS.md      # 개발 현황 리포트
+│   ├── DEVELOPMENT_STATUS.md      # 개발 현황 리포트
+│   ├── IMPLEMENTATION_PLAN.md     # 인터페이스 구현 계획서
+│   ├── IMPLEMENTATION_SUMMARY.md  # 구현 요약
+│   ├── USER_GUIDE.md              # 사용자 가이드
+│   └── TEST_GUIDE.md              # 테스트 가이드
 ├── fonts/                         # 한글 폰트 파일
 │   └── maruburi/TTF/
 │       ├── MaruBuri-Regular.ttf
@@ -45,14 +51,33 @@ pinky_lcd_display/
 - `std_msgs`: 표준 메시지 타입
 - `python3-pil`: PIL/Pillow 이미지 처리 라이브러리
 - `ament_index_python`: 패키지 경로 탐색 (한글 폰트 경로 탐색용)
+- `pinky_lcd_display_interfaces`: 인터페이스 패키지 (서비스, 액션, 메시지 정의)
+
+### 의존성에 대한 중요 설명
+
+**`pinky_lcd_display_interfaces` 패키지는**:
+- ✅ **인터페이스 정의 패키지**입니다 (타입 정의만 포함)
+- ✅ **별도의 노드를 실행할 필요가 없습니다**
+- ✅ **빌드 시 필수**입니다 (타입 정의를 위해)
+- ✅ **런타임 시 필수**입니다 (서비스/액션 사용 시 Python import를 위해)
+- ⚠️ **없어도 기본 토픽 구독 기능은 동작합니다** (서비스/액션만 비활성화)
+
+**로봇에 설치 방법**:
+- ✅ **통합 완료**: `pinky_lcd_display_interfaces` 패키지가 현재 브랜치에 포함되어 있습니다.
+- 같은 워크스페이스(`ROS2/rfred`)에서 한 번에 빌드 및 설치 가능합니다.
+
+자세한 내용은 [의존성 요구사항 문서](docs/DEPENDENCY_REQUIREMENTS.md) 및 [패키지 통합 리포트](docs/PACKAGE_INTEGRATION_REPORT.md)를 참조하세요.
 
 ## 빌드 방법
 
 ```bash
 cd ~/ros-repo-1/ROS2/rfred
-colcon build --packages-select pinky_lcd_display
+# 인터페이스 패키지와 함께 빌드 (인터페이스 패키지가 자동으로 먼저 빌드됨)
+colcon build --packages-select pinky_lcd_display_interfaces pinky_lcd_display
 source install/setup.bash
 ```
+
+**참고**: `pinky_lcd_display_interfaces` 패키지가 현재 브랜치에 포함되어 있어 함께 빌드해야 합니다.
 
 ## 사용 방법
 
@@ -113,18 +138,46 @@ ros2 run pinky_lcd_display test_pub
 
 **구독 토픽:**
 - **`/lcd/status`** (std_msgs/String)
-  - LCD에 표시할 내용을 받는 토픽
+  - LCD에 표시할 내용을 받는 토픽 (기존 방식 유지)
   - 메시지 형식: 첫 번째 줄은 타이틀, 나머지는 본문 라인
   - 예: `"Pinky Status\nBattery: 78%\nMode: MOVING"`
 
 **발행 토픽:**
-- 없음 (읽기 전용)
+- **`/lcd_controller/status`** (pinky_lcd_display_interfaces/msg/LCDStatus)
+  - LCD 현재 상태를 실시간으로 발행 (1Hz)
+  - 현재 표시 내용, 스타일, 레이아웃 정보 포함
+
+- **`/lcd_controller/events`** (pinky_lcd_display_interfaces/msg/LCDEvent)
+  - LCD 이벤트 발행 (표시 시작, 종료, 에러 등)
 
 ### 서비스 (Service)
-- 현재 제공하지 않음
+
+**제공 서비스:**
+- **`lcd_controller/set_display`** (pinky_lcd_display_interfaces/srv/SetDisplay)
+  - LCD 내용 설정 (타이틀, 본문 라인, 타임스탬프)
+
+- **`lcd_controller/set_style`** (pinky_lcd_display_interfaces/srv/SetStyle)
+  - LCD 스타일 설정 (색상, 폰트 크기, 폰트 경로) - 동적 적용 지원
+
+- **`lcd_controller/clear_display`** (pinky_lcd_display_interfaces/srv/ClearDisplay)
+  - LCD 화면 지우기
+
+- **`lcd_controller/set_layout`** (pinky_lcd_display_interfaces/srv/SetLayout)
+  - 레이아웃 설정 (정렬, 여백, 간격, 그리드 모드)
 
 ### 액션 (Action)
-- 현재 제공하지 않음
+
+**제공 액션:**
+- **`lcd_controller/set_display_action`** (pinky_lcd_display_interfaces/action/SetDisplay)
+  - 시간 제한이 있는 LCD 표시
+  - 애니메이션 효과 (FADE_IN, SLIDE)
+  - 진행 상태 피드백
+
+- **`lcd_controller/scroll_text_action`** (pinky_lcd_display_interfaces/action/ScrollText)
+  - 긴 텍스트를 스크롤하여 표시
+  - 방향 제어 (LEFT, RIGHT)
+  - 스크롤 속도 조절
+  - 반복 횟수 설정
 
 ## 메시지 형식
 
@@ -283,9 +336,62 @@ if __name__ == '__main__':
     main()
 ```
 
+## 인터페이스 사용 예시
+
+### 서비스 호출
+
+```bash
+# SetDisplay 서비스
+ros2 service call /lcd_controller/set_display \
+  pinky_lcd_display_interfaces/srv/SetDisplay \
+  "{title: 'Pinky Status', lines: ['Battery: 78%', 'Mode: MOVING'], show_timestamp: true}"
+
+# SetStyle 서비스
+ros2 service call /lcd_controller/set_style \
+  pinky_lcd_display_interfaces/srv/SetStyle \
+  "{bg_color_r: 0, bg_color_g: 0, bg_color_b: 0, title_color_r: 0, title_color_g: 255, title_color_b: 0, body_color_r: 255, body_color_g: 255, body_color_b: 255, timestamp_color_r: 100, timestamp_color_g: 100, timestamp_color_b: 255, title_font_size: 20, body_font_size: 18, font_path: ''}"
+
+# SetLayout 서비스
+ros2 service call /lcd_controller/set_layout \
+  pinky_lcd_display_interfaces/srv/SetLayout \
+  "{alignment: 1, layout_mode: 1, margin_top: 10, margin_bottom: 10, margin_left: 10, margin_right: 10, line_spacing: 24, grid_columns: 1, grid_rows: 1}"
+```
+
+### 액션 호출
+
+```bash
+# SetDisplayAction (페이드 인 효과, 5초간 표시)
+ros2 action send_goal /lcd_controller/set_display_action \
+  pinky_lcd_display_interfaces/action/SetDisplay \
+  "{title: 'Alert', lines: ['Low battery!', 'Please charge'], show_timestamp: true, duration_ms: 5000, animation_type: 1}"
+
+# ScrollTextAction
+ros2 action send_goal /lcd_controller/scroll_text_action \
+  pinky_lcd_display_interfaces/action/ScrollText \
+  "{text: 'This is a very long text that needs to be scrolled', scroll_speed_ms: 50, direction: 0, repeat_count: 1}"
+```
+
+### 토픽 구독
+
+```bash
+# 상태 토픽 구독
+ros2 topic echo /lcd_controller/status
+
+# 이벤트 토픽 구독
+ros2 topic echo /lcd_controller/events
+```
+
 ## 추가 문서
 
+- [패키지 통합 리포트](docs/PACKAGE_INTEGRATION_REPORT.md) - **필수 읽기**: 인터페이스 패키지 통합 및 정상화 리포트
+- [의존성 요구사항](docs/DEPENDENCY_REQUIREMENTS.md) - **필수 읽기**: 패키지 의존성 및 설치 요구사항
 - [개발 현황 리포트](docs/DEVELOPMENT_STATUS.md) - 개발 현황 및 사용 방법 상세 설명
+- [구현 계획서](docs/IMPLEMENTATION_PLAN.md) - 인터페이스 구현 대상 목록 및 구현 현황
+- [인터페이스 통합 현황](docs/INTEGRATION_STATUS.md) - 인터페이스 통합 현황 및 사용 방법
+- [기능 상세 설명](docs/FEATURE_DETAILS.md) - 각 기능의 상세한 설명
+- [구현 요약](docs/IMPLEMENTATION_SUMMARY.md) - 구현 계획 및 가이드 문서 요약
+- [사용자 가이드](docs/USER_GUIDE.md) - 서비스, 액션, 토픽 사용 방법 및 옵셔널 파라미터 가이드
+- [테스트 가이드](docs/TEST_GUIDE.md) - 자동 테스트 코드 및 테스트 방법
 
 ## 문제 해결
 

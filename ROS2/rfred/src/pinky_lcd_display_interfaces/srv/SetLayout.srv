@@ -1,0 +1,15 @@
+# Request
+uint8 alignment                 # 0: LEFT, 1: CENTER, 2: RIGHT
+uint8 layout_mode               # 0: SINGLE_LINE, 1: MULTI_LINE, 2: GRID
+uint8 margin_top                 # 상단 여백 (픽셀)
+uint8 margin_bottom             # 하단 여백 (픽셀)
+uint8 margin_left               # 좌측 여백 (픽셀)
+uint8 margin_right              # 우측 여백 (픽셀)
+uint8 line_spacing              # 라인 간격 (픽셀)
+uint8 grid_columns              # 그리드 모드: 열 수
+uint8 grid_rows                 # 그리드 모드: 행 수
+---
+# Response
+bool success
+string message
+
