@@ -14,6 +14,14 @@ pinky_lcd_display_controller/
 ├── setup.py
 ├── setup.cfg
 ├── README.md
+├── docs/                           # 문서 디렉토리
+│   ├── DEVELOPMENT_REPORT.md      # 개발 현황 리포트
+│   ├── FEATURES.md                  # 제어 가능한 기능
+│   ├── INTEGRATION_GUIDE.md         # 연동 가이드
+│   ├── INTERFACE_PROPOSAL.md        # 인터페이스 확장 제안서
+│   ├── PINKY_LCD_DISPLAY_USAGE.md   # 사용 가이드
+│   ├── QUICK_START.md               # 빠른 시작 가이드
+│   └── SUMMARY.md                   # 개발 요약
 ├── resource/
 │   └── pinky_lcd_display_controller
 └── pinky_lcd_display_controller/
@@ -146,9 +154,17 @@ ros2 topic pub --rate 1 /lcd/status std_msgs/msg/String "{data: 'Status\nTime: $
 - `\n`으로 줄바꿈을 구분합니다
 - 타임스탬프는 자동으로 하단에 표시됩니다
 
-자세한 연동 방법은 [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md)를 참조하세요.
+자세한 연동 방법은 [docs/INTEGRATION_GUIDE.md](docs/INTEGRATION_GUIDE.md)를 참조하세요.
 
 ## 제어 가능한 피쳐
 
-자세한 내용은 [FEATURES.md](FEATURES.md)를 참조하세요.
+자세한 내용은 [docs/FEATURES.md](docs/FEATURES.md)를 참조하세요.
+
+## 추가 문서
+
+- [개발 현황 리포트](docs/DEVELOPMENT_REPORT.md) - 프로젝트 개발 현황 및 통신 방식 분석
+- [인터페이스 확장 제안서](docs/INTERFACE_PROPOSAL.md) - 향후 개발을 위한 인터페이스 제안
+- [빠른 시작 가이드](docs/QUICK_START.md) - 빠른 시작을 위한 가이드
+- [사용 가이드](docs/PINKY_LCD_DISPLAY_USAGE.md) - 상세 사용 방법
+- [개발 요약](docs/SUMMARY.md) - 개발 작업 요약
 

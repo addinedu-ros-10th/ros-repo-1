@@ -9,6 +9,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 from pinky_lcd_display_interfaces.srv import SetDisplay, SetStyle, ClearDisplay
+import os
+from ament_index_python.packages import get_package_share_directory
 
 
 class LCDControllerServer(Node):
@@ -21,6 +23,52 @@ class LCDControllerServer(Node):
     - ClearDisplay: LCD 화면 지우기
     """
     
+    def _find_korean_font(self):
+        """
+        한글 폰트 파일 경로를 찾습니다.
+        
+        우선순위:
+        1. 패키지 설치 경로의 fonts/maruburi/TTF/MaruBuri-Regular.ttf
+        2. 현재 작업 디렉토리의 fonts/maruburi/TTF/MaruBuri-Regular.ttf
+        3. 상대 경로 ./fonts/maruburi/TTF/MaruBuri-Regular.ttf
+        
+        Returns:
+            str: 폰트 파일 경로, 찾지 못하면 None
+        """
+        font_filename = 'MaruBuri-Regular.ttf'
+        possible_paths = []
+        
+        # 1. 패키지 설치 경로에서 찾기
+        try:
+            package_share_dir = get_package_share_directory('pinky_lcd_display_controller')
+            installed_font_path = os.path.join(
+                package_share_dir, 'fonts', 'maruburi', 'TTF', font_filename
+            )
+            possible_paths.append(installed_font_path)
+        except Exception as e:
+            self.get_logger().debug(f'Could not get package share directory: {e}')
+        
+        # 2. 현재 작업 디렉토리 기준
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        local_font_path = os.path.join(current_dir, 'fonts', 'maruburi', 'TTF', font_filename)
+        possible_paths.append(local_font_path)
+        
+        # 3. 상대 경로 (개발 환경)
+        relative_font_path = os.path.join('fonts', 'maruburi', 'TTF', font_filename)
+        possible_paths.append(relative_font_path)
+        
+        # 4. 절대 경로 (로봇 환경)
+        robot_font_path = os.path.join('/home/pinky/ros-repo-1/SERVER/ros2-server/src/pinky_lcd_display_controller', 'fonts', 'maruburi', 'TTF', font_filename)
+        possible_paths.append(robot_font_path)
+        
+        # 경로 확인
+        for font_path in possible_paths:
+            if os.path.exists(font_path) and os.path.isfile(font_path):
+                return os.path.abspath(font_path)
+        
+        # 기본 폰트 경로 반환
+        return '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+    
     def __init__(self):
         super().__init__('lcd_controller_server')
         
@@ -31,6 +79,9 @@ class LCDControllerServer(Node):
             10
         )
         
+        # 한글 폰트 경로 찾기
+        korean_font_path = self._find_korean_font()
+        
         # 현재 스타일 설정 저장
         self.current_style = {
             'bg_color': (0, 0, 0),
@@ -39,8 +90,13 @@ class LCDControllerServer(Node):
             'timestamp_color': (100, 100, 255),
             'title_font_size': 20,
             'body_font_size': 18,
-            'font_path': '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            'font_path': korean_font_path,
         }
+        
+        if korean_font_path and 'MaruBuri' in korean_font_path:
+            self.get_logger().info(f'Korean font found: {korean_font_path}')
+        else:
+            self.get_logger().warn('Korean font not found, using default font')
         
         # 서비스 서버 생성
         self.set_display_srv = self.create_service(
