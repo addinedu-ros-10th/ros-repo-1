@@ -6,6 +6,8 @@ Pinky 로봇의 LCD 디스플레이를 제어하기 위한 서비스 기반 컨�
 
 이 패키지는 `pinky_lcd_display` 패키지를 서비스 인터페이스를 통해 제어할 수 있도록 하는 서버를 제공합니다. ROS2 서비스를 통해 LCD 표시 내용과 스타일을 동적으로 제어할 수 있습니다.
 
+**새로운 기능**: `pinky_lcd_display` 패키지의 모든 서비스와 액션을 직접 호출할 수 있는 클라이언트 기능이 추가되었습니다. 네트워크를 통해 원격으로 모든 기능을 제어할 수 있습니다.
+
 ## 패키지 구조
 
 ```
@@ -71,10 +73,26 @@ ros2 service call /lcd_controller/set_style pinky_lcd_display_interfaces/srv/Set
 ros2 service call /lcd_controller/clear_display pinky_lcd_display_interfaces/srv/ClearDisplay
 ```
 
+## 주요 기능
+
+### 서비스/액션 클라이언트
+
+이 패키지는 `pinky_lcd_display` 패키지의 모든 서비스와 액션을 직접 호출할 수 있는 클라이언트를 제공합니다:
+
+- **서비스 클라이언트**: SetDisplay, SetStyle, ClearDisplay, SetLayout
+- **액션 클라이언트**: SetDisplayAction, ScrollTextAction
+- **폴백 지원**: 서비스가 사용 불가능한 경우 토픽으로 자동 폴백
+
+자세한 사용 방법은 [클라이언트 사용 예시](docs/CLIENT_USAGE_EXAMPLES.md)를 참조하세요.
+
 ## 제공 서비스
 
 ### 1. `lcd_controller/set_display`
 LCD에 표시할 내용을 설정합니다.
+
+**동작 방식**: 
+- 우선 `pinky_lcd_display`의 서비스를 직접 호출
+- 서비스가 사용 불가능한 경우 토픽으로 폴백
 
 **요청 (Request):**
 - `title` (string): 타이틀 텍스트 (최대 20자)
