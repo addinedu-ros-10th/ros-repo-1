@@ -1,0 +1,56 @@
+feat(database): DB 테이블 자동 생성 및 사용자 권한 부여 기능 개선
+
+## 주요 변경사항
+
+### 1. 데이터베이스 테이블 자동 생성 개선
+- create_tables() 메서드에 사전/사후 검증 로직 추가
+- SQLAlchemy create_all() 실패 시에도 계속 진행하도록 개선
+- 누락된 테이블 자동 감지 및 SQL로 직접 생성 기능
+- 재검증 로직 강화 (최대 5번 재시도, 점진적 대기 시간)
+- information_schema를 사용한 스키마 명시적 확인
+
+### 2. 사용자 권한 자동 부여 기능 추가
+- _grant_permissions() 메서드 추가
+- 서버 시작 시 자동으로 svc_app 계정에 권한 부여
+- pg_user에서 사용자 존재 여부 사전 확인
+- 파라미터 바인딩 사용으로 안전한 SQL 실행
+- 테이블별 개별 처리로 일부 실패해도 계속 진행
+- 환경 변수 DB_ADDITIONAL_USERS 지원
+
+### 3. Health Check API 개선
+- 스키마 정보 (schema) 추가
+- 데이터베이스 이름 (database_name) 추가
+- 테이블별 상세 정보 (존재 여부, 스키마, 행 수)
+
+### 4. 문서 추가
+- docs/grant_permissions.sql: 수동 권한 부여 스크립트
+- docs/DEVELOPMENT_STATUS.md: 개발 현황 리포트
+
+## 해결된 문제
+
+1. 테이블 생성 실패 문제
+   - 증상: "Tables/indices already exist" 메시지지만 실제 테이블 없음
+   - 해결: 테이블 생성 후 검증, 누락 시 SQL로 직접 생성
+
+2. 권한 부여 실패 문제
+   - 증상: "User svc_app does not exist" 메시지 출력
+   - 해결: 사용자 존재 여부 사전 확인, 파라미터 바인딩 사용
+
+3. 스키마 정보 확인 불가
+   - 증상: 테이블이 어느 스키마에 생성되었는지 확인 불가
+   - 해결: information_schema 사용, Health Check API에 정보 추가
+
+## 변경된 파일
+
+- src/database.py: 테이블 생성/검증 로직 개선, 권한 부여 기능 추가
+- src/main.py: Health Check API에 스키마 정보 추가
+- docs/grant_permissions.sql: 권한 부여 스크립트 추가
+- docs/DEVELOPMENT_STATUS.md: 개발 현황 리포트 추가
+
+## 테스트 상태
+
+- ✅ 서버 시작 시 테이블 자동 생성 확인
+- ✅ 테이블 생성 후 검증 확인
+- ✅ svc_app 계정 권한 자동 부여 확인
+- ✅ Health Check API 스키마 정보 반환 확인
+

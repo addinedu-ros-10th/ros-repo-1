@@ -455,7 +455,19 @@
                     </label>
                     <div class="description">체크 시 오디오 재생 완료 후 자동으로 다음 입력 대기</div>
                 </div>
+                
+                <div class="setting-item">
+                    <label for="activationDuration">활성화 유지 시간:</label>
+                    <input type="number" id="activationDuration" min="1" max="60" value="5" step="1">
+                    <span class="unit">분</span>
+                    <div class="description">키워드 감지 후 활성화 상태가 유지되는 시간 (1-60분)</div>
+                </div>
             </div>
+        </div>
+        
+        <div class="activation-timer" id="activationTimer" style="display: none; background: #e7f3ff; padding: 10px; border-radius: 10px; margin: 10px 0; text-align: center;">
+            <span id="timerText">활성화 상태: <strong id="timerValue">5:00</strong> 남음</span>
+            <span id="warningText" style="display: none; color: #dc3545; font-weight: bold; margin-left: 10px;"></span>
         </div>
         
         <div class="controls">
@@ -495,12 +507,19 @@
         let keywordAudioBuffer = null; // 키워드 감지 시점의 오디오 버퍼
         let voiceprintCount = 0; // 등록된 음성 지문 개수
         
+        // 활성화 시간 관리
+        let activationTimer = null; // 활성화 유지 타이머
+        let activationStartTime = null; // 활성화 시작 시간
+        let activationDuration = 5 * 60 * 1000; // 기본 5분 (밀리초)
+        let warningShown = false; // 경고 메시지 표시 여부
+        
         // 설정 파라미터
         function getSettings() {
             return {
                 recordingDuration: parseFloat(document.getElementById('recordingDuration').value) * 1000, // 밀리초
                 keywordWaitTime: parseFloat(document.getElementById('keywordWaitTime').value) * 1000, // 밀리초
-                autoWaitMode: document.getElementById('autoWaitMode').checked
+                autoWaitMode: document.getElementById('autoWaitMode').checked,
+                activationDuration: parseFloat(document.getElementById('activationDuration').value) * 60 * 1000 // 분을 밀리초로 변환
             };
         }
         
@@ -552,11 +571,16 @@
                 const keywordMatch = keywordRegex.test(fullText);
                 const keywordIncluded = fullText.includes(KEYWORD);
                 
-                // 키워드가 감지되고 세션이 활성화되지 않았을 때만 서버로 확인 요청
-                if ((keywordMatch || keywordIncluded) && !sessionActive && isListening) {
-                    console.log('키워드 후보 감지:', fullText);
-                    // 서버에서 키워드 확인 및 음성 인터페이스 활성화 여부 확인
-                    checkKeywordWithServer(fullText);
+                // 키워드가 감지되었을 때
+                if (keywordMatch || keywordIncluded) {
+                    if (!sessionActive && isListening) {
+                        // 세션이 비활성화 상태일 때만 키워드 확인
+                        console.log('키워드 후보 감지:', fullText);
+                        checkKeywordWithServer(fullText);
+                    } else if (sessionActive) {
+                        // 활성화 상태일 때는 키워드를 무시하고 연속 대화 가능
+                        // (키워드 감지는 비활성화 상태에서만 동작)
+                    }
                 }
             };
             
@@ -714,9 +738,121 @@
             }
         }
         
+        // 활성화 타이머 시작
+        function startActivationTimer() {
+            const settings = getSettings();
+            activationDuration = settings.activationDuration;
+            activationStartTime = Date.now();
+            warningShown = false;
+            
+            // 타이머 표시
+            const timerDiv = document.getElementById('activationTimer');
+            timerDiv.style.display = 'block';
+            
+            // 타이머 업데이트
+            updateActivationTimer();
+            
+            // 1초마다 타이머 업데이트
+            if (activationTimer) {
+                clearInterval(activationTimer);
+            }
+            activationTimer = setInterval(() => {
+                updateActivationTimer();
+            }, 1000);
+        }
+        
+        // 활성화 타이머 업데이트
+        function updateActivationTimer() {
+            if (!activationStartTime || !sessionActive) {
+                return;
+            }
+            
+            const elapsed = Date.now() - activationStartTime;
+            const remaining = activationDuration - elapsed;
+            
+            if (remaining <= 0) {
+                // 활성화 시간 종료
+                clearActivationTimer();
+                deactivateSession();
+                return;
+            }
+            
+            // 남은 시간 표시
+            const minutes = Math.floor(remaining / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
+            const timerValue = document.getElementById('timerValue');
+            if (timerValue) {
+                timerValue.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            // 경고 시간 (활성화 시간의 80%)
+            const warningTime = activationDuration * 0.8;
+            if (elapsed >= warningTime && !warningShown) {
+                warningShown = true;
+                const warningSeconds = Math.ceil(remaining / 1000);
+                showWarningMessage(warningSeconds);
+            }
+        }
+        
+        // 경고 메시지 표시
+        function showWarningMessage(seconds) {
+            const warningText = document.getElementById('warningText');
+            if (warningText) {
+                warningText.textContent = `⚠️ ${seconds}초 후에 알프레드 음성 대화가 비활성화 됩니다`;
+                warningText.style.display = 'inline';
+            }
+        }
+        
+        // 활성화 타이머 정리
+        function clearActivationTimer() {
+            if (activationTimer) {
+                clearInterval(activationTimer);
+                activationTimer = null;
+            }
+            activationStartTime = null;
+            warningShown = false;
+            
+            const timerDiv = document.getElementById('activationTimer');
+            if (timerDiv) {
+                timerDiv.style.display = 'none';
+            }
+            
+            const warningText = document.getElementById('warningText');
+            if (warningText) {
+                warningText.style.display = 'none';
+            }
+        }
+        
+        // 세션 비활성화
+        function deactivateSession() {
+            sessionActive = false;
+            document.getElementById('keywordStatus').textContent = '대기 중';
+            document.getElementById('keywordIndicator').classList.remove('active');
+            hideSimilarity();
+            updateStatus('waiting', '활성화를 위해 "alfred"라고 말해주세요');
+            
+            // 키워드 감지를 다시 활성화
+            if (recognition && isListening) {
+                setTimeout(() => {
+                    try {
+                        if (isListening && !sessionActive && recognition) {
+                            if (recognition.state === 'stopped' || recognition.state === 'inactive') {
+                                recognition.start();
+                                console.log('비활성화 후 키워드 감지 재시작');
+                            }
+                        }
+                    } catch (e) {
+                        console.log('비활성화 후 recognition 재시작 실패:', e);
+                    }
+                }, 500);
+            }
+        }
+        
         // 키워드 활성화 처리
         function activateKeyword(matchedKeyword, sttResult, voiceprintId = null) {
             if (sessionActive) {
+                // 이미 활성화되어 있으면 타이머만 리셋
+                startActivationTimer();
                 return;
             }
             
@@ -724,6 +860,9 @@
             document.getElementById('keywordStatus').textContent = '감지됨! 질문을 말하세요';
             document.getElementById('keywordIndicator').classList.add('active');
             updateStatus('listening', `🎯 키워드 감지! (${matchedKeyword}) 질문을 말하세요...`);
+            
+            // 활성화 타이머 시작
+            startActivationTimer();
             
             // 키워드 감지 후 설정된 대기 시간 후 자동으로 녹음 시작
             const settings = getSettings();
@@ -1023,28 +1162,19 @@
                         playAudioFromBase64(data.audio_base64, data.assistant_text);
                     }
                     
-                    // 세션 상태 초기화 (오디오 재생 완료 후 자동 대기 모드에서 다시 활성화됨)
-                    sessionActive = false;
+                    // 연속 대화를 위해 세션 활성 상태 유지 (활성화 시간 내)
+                    // sessionActive는 활성화 타이머가 관리하므로 여기서는 false로 설정하지 않음
+                    // 단, lastDetectedKeyword는 초기화 (다음 대화에서는 키워드 없이 바로 질문 가능)
                     lastDetectedKeyword = null; // 사용 후 초기화
-                    document.getElementById('keywordStatus').textContent = '대기 중';
-                    document.getElementById('keywordIndicator').classList.remove('active');
-                    hideSimilarity();
                     
-                    // 키워드 감지를 다시 활성화 (recognition이 실행 중이면 계속 실행됨)
-                    if (isListening && recognition) {
-                        // recognition이 중지되었다면 다시 시작
-                        setTimeout(() => {
-                            if (isListening && !sessionActive) {
-                                try {
-                                    if (recognition.state === 'stopped' || recognition.state === 'inactive') {
-                                        recognition.start();
-                                    }
-                                } catch (e) {
-                                    console.log('처리 후 recognition 재시작 실패:', e);
-                                }
-                            }
-                        }, 500);
+                    // 활성화 상태가 유지되면 키워드 표시는 유지
+                    if (sessionActive) {
+                        document.getElementById('keywordStatus').textContent = '질문을 말하세요';
+                        // 키워드 인디케이터는 활성 상태 유지
                     }
+                    
+                    // 활성화 시간 내이면 키워드 감지 없이 바로 다음 질문 가능
+                    // recognition은 계속 실행 중이지만, 키워드 감지는 sessionActive가 true일 때는 무시됨
                     
                 } else {
                     throw new Error(data.error || '처리 실패');
@@ -1089,38 +1219,54 @@
                     
                     if (settings.autoWaitMode && isListening) {
                         // 자동 대기 모드: 오디오 재생 완료 후 자동으로 다음 입력 대기
-                        updateStatus('waiting', '대기 중... "alfred"라고 말해주세요');
-                        sessionActive = false;
-                        document.getElementById('keywordStatus').textContent = '대기 중';
-                        document.getElementById('keywordIndicator').classList.remove('active');
-                        hideSimilarity();
-                        
-                        // 키워드 감지를 다시 활성화
-                        if (recognition && isListening) {
-                            // recognition이 중지된 경우 다시 시작
+                        if (sessionActive) {
+                            // 활성화 상태가 유지되면 키워드 없이 바로 질문 가능
+                            updateStatus('listening', '질문을 말하세요... (활성화 상태 유지 중)');
+                            document.getElementById('keywordStatus').textContent = '질문을 말하세요';
+                            // 키워드 인디케이터는 활성 상태 유지
+                            
+                            // 활성화 시간 내이면 바로 녹음 시작 가능
                             setTimeout(() => {
-                                try {
-                                    if (isListening && !sessionActive && recognition) {
-                                        if (recognition.state === 'stopped' || recognition.state === 'inactive') {
-                                            recognition.start();
-                                            console.log('오디오 재생 후 키워드 감지 재시작');
-                                        }
-                                    }
-                                } catch (e) {
-                                    console.log('오디오 재생 후 recognition 재시작 실패:', e);
+                                if (sessionActive && isListening) {
+                                    startRecording();
                                 }
                             }, 500);
+                        } else {
+                            // 활성화 시간이 지나면 키워드 감지 모드로 전환
+                            updateStatus('waiting', '대기 중... "alfred"라고 말해주세요');
+                            document.getElementById('keywordStatus').textContent = '대기 중';
+                            document.getElementById('keywordIndicator').classList.remove('active');
+                            hideSimilarity();
+                            
+                            // 키워드 감지를 다시 활성화
+                            if (recognition && isListening) {
+                                setTimeout(() => {
+                                    try {
+                                        if (isListening && !sessionActive && recognition) {
+                                            if (recognition.state === 'stopped' || recognition.state === 'inactive') {
+                                                recognition.start();
+                                                console.log('오디오 재생 후 키워드 감지 재시작');
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.log('오디오 재생 후 recognition 재시작 실패:', e);
+                                    }
+                                }, 500);
+                            }
                         }
                         
                         // 오디오 레벨 측정이 계속 실행되도록 확인
                         if (!audioContext && isListening) {
-                            // 오디오 레벨 측정 재시작
                             setTimeout(() => {
                                 restartAudioLevelMeter();
                             }, 500);
                         }
                     } else {
-                        updateStatus('waiting', '재생 완료. 다시 시작하려면 "시작" 버튼을 클릭하세요.');
+                        if (sessionActive) {
+                            updateStatus('listening', '재생 완료. 질문을 말하세요... (활성화 상태 유지 중)');
+                        } else {
+                            updateStatus('waiting', '재생 완료. 다시 시작하려면 "시작" 버튼을 클릭하세요.');
+                        }
                     }
                 };
                 
@@ -1246,6 +1392,9 @@
                 currentAudio.pause();
             }
             
+            // 활성화 타이머 정리
+            clearActivationTimer();
+            
             // 오디오 레벨 측정 중지 (완전히 중지할 때만)
             if (levelAnimationFrame) {
                 cancelAnimationFrame(levelAnimationFrame);
@@ -1281,6 +1430,9 @@
                 currentAudio = null;
             }
             
+            // 활성화 타이머 정리
+            clearActivationTimer();
+            
             sessionActive = false;
             document.getElementById('keywordStatus').textContent = '대기 중';
             document.getElementById('keywordIndicator').classList.remove('active');
@@ -1314,6 +1466,15 @@
             });
             document.getElementById('autoWaitMode').addEventListener('change', (e) => {
                 localStorage.setItem('autoWaitMode', e.target.checked);
+            });
+            
+            // 활성화 유지 시간 설정 불러오기
+            const savedActivationDuration = localStorage.getItem('activationDuration');
+            if (savedActivationDuration) {
+                document.getElementById('activationDuration').value = savedActivationDuration;
+            }
+            document.getElementById('activationDuration').addEventListener('change', (e) => {
+                localStorage.setItem('activationDuration', e.target.value);
             });
         });
     </script>
