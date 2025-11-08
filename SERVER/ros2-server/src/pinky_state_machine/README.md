@@ -9,6 +9,10 @@ pinky_state_machine/
 ├── package.xml              # ROS2 패키지 메타데이터
 ├── setup.py                 # Python 패키지 설정 및 entry points
 ├── setup.cfg                # 설치 설정
+├── README.md                # 패키지 개요 및 사용 가이드
+├── docs/                    # 문서 디렉토리
+│   ├── DEVELOPMENT_REPORT.md # 개발 현황 리포트
+│   └── TODO.md              # 개발 할 일 목록
 ├── resource/
 │   └── pinky_state_machine  # 리소스 마커 파일
 └── pinky_state_machine/
@@ -284,7 +288,7 @@ pip3 install PyQt5 matplotlib
 - `control_apps.py`
 
 **관련 문서:**
-- [개발 현황 리포트](DEVELOPMENT_REPORT.md)
-- [센서 통합 TODO](TODO.md)
+- [개발 현황 리포트](docs/DEVELOPMENT_REPORT.md)
+- [센서 통합 TODO](docs/TODO.md)
 - [pinky_pro 인터페이스 리포트](../../../../../pinky_pro/ROS2_INTERFACES_REPORT.md)
 
