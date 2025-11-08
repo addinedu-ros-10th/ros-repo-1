@@ -170,34 +170,22 @@ class LCDControllerServer(Node):
         SetDisplay 서비스 콜백
         LCD에 표시할 내용을 설정합니다.
         
-        우선 서비스 클라이언트를 통해 pinky_lcd_display의 서비스를 호출하고,
-        서비스가 사용 불가능한 경우 토픽으로 폴백합니다.
+        서비스 콜백 내부에서 다른 서비스를 호출하면 spin_once가 응답을 제대로 처리하지 못할 수 있습니다.
+        따라서 토픽을 통해 직접 전송합니다.
         """
         try:
-            # 서비스 클라이언트로 호출 시도
-            if self.set_display_client.wait_for_service(timeout_sec=1.0):
-                self.get_logger().debug('Calling SetDisplay service on pinky_lcd_display')
-                future = self.set_display_client.call_async(request)
-                
-                # 짧은 시간 동안 폴링 (데드락 방지)
-                # spin_until_future_complete는 서비스 콜백 내부에서 데드락을 일으킬 수 있음
-                timeout_sec = 5.0  # 타임아웃 증가 (LCD 렌더링 시간 고려)
-                start_time = time.time()
-                
-                while not future.done() and (time.time() - start_time) < timeout_sec:
-                    rclpy.spin_once(self, timeout_sec=0.1)  # 짧은 시간만 스핀
-                
-                if future.done():
-                    service_response = future.result()
-                    response.success = service_response.success
-                    response.message = service_response.message
-                    self.get_logger().info(f"SetDisplay service call successful: {response.message}")
-                else:
-                    elapsed = time.time() - start_time
-                    self.get_logger().warn(f"SetDisplay service call timeout after {elapsed:.2f}s, falling back to topic")
-                    self._fallback_to_topic_set_display(request, response)
+            # 서비스 클라이언트로 호출 시도 (비동기, 응답 대기 안 함)
+            if self.set_display_client.wait_for_service(timeout_sec=0.5):
+                self.get_logger().debug('Calling SetDisplay service on pinky_lcd_display (async, no wait)')
+                # 비동기 호출만 하고 응답은 기다리지 않음
+                self.set_display_client.call_async(request)
+                # 즉시 성공 응답 반환
+                response.success = True
+                response.message = "Display update request sent (async)"
+                self.get_logger().info("SetDisplay service call sent (async)")
             else:
-                self.get_logger().warn("SetDisplay service not available, falling back to topic")
+                # 서비스가 없으면 토픽으로 폴백
+                self.get_logger().debug("SetDisplay service not available, using topic")
                 self._fallback_to_topic_set_display(request, response)
             
         except Exception as e:
@@ -280,33 +268,22 @@ class LCDControllerServer(Node):
         ClearDisplay 서비스 콜백
         LCD 화면을 지웁니다.
         
-        우선 서비스 클라이언트를 통해 pinky_lcd_display의 서비스를 호출하고,
-        서비스가 사용 불가능한 경우 토픽으로 폴백합니다.
+        서비스 콜백 내부에서 다른 서비스를 호출하면 spin_once가 응답을 제대로 처리하지 못할 수 있습니다.
+        따라서 토픽을 통해 직접 전송합니다.
         """
         try:
-            # 서비스 클라이언트로 호출 시도
-            if self.clear_display_client.wait_for_service(timeout_sec=1.0):
-                self.get_logger().debug('Calling ClearDisplay service on pinky_lcd_display')
-                future = self.clear_display_client.call_async(request)
-                
-                # 짧은 시간 동안 폴링 (데드락 방지)
-                timeout_sec = 5.0  # 타임아웃 증가
-                start_time = time.time()
-                
-                while not future.done() and (time.time() - start_time) < timeout_sec:
-                    rclpy.spin_once(self, timeout_sec=0.1)
-                
-                if future.done():
-                    service_response = future.result()
-                    response.success = service_response.success
-                    response.message = service_response.message
-                    self.get_logger().info(f"ClearDisplay service call successful: {response.message}")
-                else:
-                    elapsed = time.time() - start_time
-                    self.get_logger().warn(f"ClearDisplay service call timeout after {elapsed:.2f}s, falling back to topic")
-                    self._fallback_to_topic_clear_display(request, response)
+            # 서비스 클라이언트로 호출 시도 (비동기, 응답 대기 안 함)
+            if self.clear_display_client.wait_for_service(timeout_sec=0.5):
+                self.get_logger().debug('Calling ClearDisplay service on pinky_lcd_display (async, no wait)')
+                # 비동기 호출만 하고 응답은 기다리지 않음
+                self.clear_display_client.call_async(request)
+                # 즉시 성공 응답 반환
+                response.success = True
+                response.message = "Clear display request sent (async)"
+                self.get_logger().info("ClearDisplay service call sent (async)")
             else:
-                self.get_logger().warn("ClearDisplay service not available, falling back to topic")
+                # 서비스가 없으면 토픽으로 폴백
+                self.get_logger().debug("ClearDisplay service not available, using topic")
                 self._fallback_to_topic_clear_display(request, response)
             
         except Exception as e:
