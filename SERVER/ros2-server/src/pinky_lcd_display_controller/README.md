@@ -162,6 +162,7 @@ ros2 topic pub --rate 1 /lcd/status std_msgs/msg/String "{data: 'Status\nTime: $
 
 ## 추가 문서
 
+- [개발 현황 문서](docs/DEVELOPMENT_STATUS.md) - **LCD 기본 기능 호출 및 사용 중심의 개발 현황 문서**
 - [개발 현황 리포트](docs/DEVELOPMENT_REPORT.md) - 프로젝트 개발 현황 및 통신 방식 분석
 - [인터페이스 확장 제안서](docs/INTERFACE_PROPOSAL.md) - 향후 개발을 위한 인터페이스 제안
 - [한글 폰트 패치 가이드](docs/KOREAN_FONT_PATCH_GUIDE.md) - 로봇에 한글 폰트 지원 추가 방법
