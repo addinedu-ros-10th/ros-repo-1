@@ -20,8 +20,7 @@ Path: `SERVER/ros2-server`
 
 ## 문서
 
-프로젝트 관련 문서는 `docs/` 디렉토리에서 확인할 수 있습니다:
-- [연동 에러 분석](docs/INTEGRATION_ERROR_ANALYSIS.md) - 패키지 간 연동 에러 분석 및 해결 가이드
+각 패키지의 문서는 해당 패키지의 `docs/` 디렉토리에서 확인할 수 있습니다.
 
 ## 패키지
 

@@ -169,6 +169,7 @@ ros2 topic pub --rate 1 /lcd/status std_msgs/msg/String "{data: 'Status\nTime: $
 - [빠른 시작 가이드](docs/QUICK_START.md) - 빠른 시작을 위한 가이드
 - [사용 가이드](docs/PINKY_LCD_DISPLAY_USAGE.md) - 상세 사용 방법
 - [개발 요약](docs/SUMMARY.md) - 개발 작업 요약
+- [연동 에러 분석](docs/INTEGRATION_ERROR_ANALYSIS.md) - 패키지 간 연동 에러 분석 및 해결 가이드
 
 ## 한글 폰트 지원
 
