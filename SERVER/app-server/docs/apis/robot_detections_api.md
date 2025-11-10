@@ -197,12 +197,33 @@ GET /api/v1/detections/registry/aruco/ARUCO_23
 ```
 
 #### 응답 (200 OK)
+
+**Redis가 활성화된 경우:**
 ```json
 {
   "status": "queued",
-  "event_id": "uuid",
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
   "actions": [],
-  "stream_id": "1234567890-0"
+  "stream_id": "1722601200000-0"
+}
+```
+
+**Redis가 비활성화된 경우 (개발/테스트 환경):**
+```json
+{
+  "status": "logged",
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
+  "actions": []
+}
+```
+
+**액션 실행 실패:**
+```json
+{
+  "status": "failed",
+  "event_id": "550e8400-e29b-41d4-a716-446655440000",
+  "actions": [],
+  "error": "Redis connection failed: ..."
 }
 ```
 
@@ -353,10 +374,42 @@ GET /api/v1/detections/registry/aruco/ARUCO_23
 - `done`: 액션이 성공적으로 실행됨
 - `failed`: 액션 실행 실패
 
+## 액션 실행기 동작 방식
+
+### Redis Streams 기반 비동기 처리
+
+액션 실행기는 Redis Streams를 사용하여 비동기로 액션을 처리합니다.
+
+#### 초기화
+- 애플리케이션 시작 시 (`startup` 이벤트) 자동 초기화
+- `REDIS_URL` 환경 변수가 설정되어 있으면 Redis 연결 시도
+- Redis 연결 실패 시 경고 로그 출력 후 로그 모드로 전환
+
+#### 액션 처리 흐름
+1. 인식 이벤트 수집 시 `execute_actions()` 호출
+2. Redis가 활성화된 경우:
+   - Redis Streams에 메시지 발행
+   - Stream 이름: `detections:actions` (기본값, `ROBOT_DETECTION_STREAM` 환경 변수로 변경 가능)
+   - 최대 10,000개 메시지 유지 (`maxlen=10000`)
+   - `stream_id` 반환
+3. Redis가 비활성화된 경우:
+   - 로그만 출력 (개발/테스트 환경)
+   - `status: "logged"` 반환
+
+#### 워커 처리
+- 실제 액션 실행은 별도 워커 프로세스에서 처리
+- 워커는 Redis Streams에서 메시지를 읽어 처리
+- API 호출 및 ROS2 명령 실행
+
+#### 환경 변수
+- `REDIS_URL`: Redis 연결 URL (예: `redis://localhost:6379/0`)
+- `ROBOT_DETECTION_STREAM`: Redis Stream 이름 (기본값: `detections:actions`)
+
 ## 주의사항
 
 1. **타임존**: `detected_at`는 UTC로 표준화되어야 합니다.
 2. **PII 보호**: 얼굴 식별키는 해시만 저장됩니다.
-3. **비동기 처리**: 액션은 Redis Streams를 통해 비동기로 처리됩니다.
+3. **비동기 처리**: 액션은 Redis Streams를 통해 비동기로 처리됩니다. Redis가 없으면 로그만 출력됩니다.
 4. **레지스트리**: 이벤트 수신 시 자동으로 레지스트리가 업데이트됩니다.
+5. **Redis 선택사항**: Redis가 없어도 API는 정상 작동하지만, 액션은 로그만 출력됩니다.
 
