@@ -56,7 +56,12 @@ docs/
 
 ### 개발 현황 확인
 - [최신 개발 현황 리포트](reports/CURRENT_DEVELOPMENT_REPORT.md)
-- [종합 개발 현황 리포트](reports/DEVELOPMENT_STATUS.md)
+- [종합 개발 현황 리포트](reports/COMPREHENSIVE_DEVELOPMENT_STATUS.md)
+- [개발 현황 리포트](reports/DEVELOPMENT_STATUS.md)
+- [1차 개발 완료 보고서](reports/PHASE1_COMPLETION_REPORT.md)
+
+### 개발 계획
+- [2차 개발 TODO](plans/TODO_PHASE2.md)
 
 ### API 사용하기
 - [API 문서](../README.md#api-엔드포인트) (프로젝트 루트 README)
