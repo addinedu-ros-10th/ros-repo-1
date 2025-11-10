@@ -447,40 +447,6 @@ WS /ws/voice?session_id=user123
 
 실시간 양방향 통신, 스트리밍 응답 전송, 세션 히스토리 자동 관리
 
-**응답:** MP3 형식의 음성 파일 (스트리밍)
-
-### 통합 음성 처리
-
-```http
-POST /api/voice/process
-Content-Type: multipart/form-data
-
-audio: [음성 파일]
-session_id: "user123"
-voice: "alloy"
-model: "gpt-4o-mini"
-```
-
-음성 입력 → ChatGPT → 음성 응답 전체 프로세스 처리
-
-**응답:** Multipart 형식 (메타데이터 + 음성 파일)
-
-### WebSocket 실시간 통신
-
-```http
-WS /ws/voice
-```
-
-WebSocket을 통한 실시간 양방향 통신
-
-**메시지 형식:**
-```json
-{
-  "type": "text",
-  "message": "안녕하세요"
-}
-```
-
 ### 세션 관리
 
 ```http
@@ -489,6 +455,27 @@ DELETE /api/session/{session_id}
 ```
 
 세션 히스토리 조회 및 삭제
+
+**GET 응답 예시:**
+```json
+{
+  "success": true,
+  "session_id": "user123",
+  "messages": [
+    {"role": "system", "content": "..."},
+    {"role": "user", "content": "..."},
+    {"role": "assistant", "content": "..."}
+  ]
+}
+```
+
+**DELETE 응답 예시:**
+```json
+{
+  "success": true,
+  "message": "세션이 삭제되었습니다"
+}
+```
 
 ---
 

@@ -47,21 +47,24 @@ LLM Gateway 프로젝트의 1차 개발이 완료되었습니다. 이 보고서�
 **엔드포인트**: `POST /api/stt`
 
 **기능**:
-- OpenAI Whisper 모델 통합
+- OpenAI Whisper 모델 통합 (whisper-1)
 - 한국어 음성 인식 지원
-- 다양한 오디오 형식 지원 (MP3, WAV, M4A 등)
-- Base64 인코딩 지원
+- 다양한 오디오 형식 지원 (MP3, WAV, M4A, WebM, OGG, FLAC)
+- 응답 형식: `{"success": true, "text": "...", "language": "ko"}`
 
 **상태**: 완료 및 운영 중
 
 ### 2. ChatGPT 통합 ✅
 
-**엔드포인트**: `POST /api/chat`
+**엔드포인트**:
+- `POST /api/chat` - 일반 채팅
+- `POST /api/chat/stream` - 스트리밍 채팅
 
 **기능**:
 - OpenAI ChatGPT API 통합
-- 세션 히스토리 관리
-- 스트리밍 응답 지원
+- 5가지 모델 지원: `gpt-4o-mini` (기본), `gpt-4o`, `gpt-4-turbo`, `gpt-4`, `gpt-3.5-turbo`
+- 세션 히스토리 관리 (Redis + PostgreSQL)
+- 스트리밍 응답 지원 (Server-Sent Events)
 - 비용 추적 및 로깅
 
 **상태**: 완료 및 운영 중
@@ -72,9 +75,10 @@ LLM Gateway 프로젝트의 1차 개발이 완료되었습니다. 이 보고서�
 
 **기능**:
 - OpenAI TTS API 통합
-- 6가지 음성 지원 (alloy, echo, fable, onyx, nova, shimmer)
-- 2가지 모델 지원 (tts-1, tts-1-hd)
+- 6가지 음성 지원: `alloy` (기본), `echo`, `fable`, `onyx`, `nova`, `shimmer`
+- 2가지 모델 지원: `tts-1` (기본), `tts-1-hd`
 - 한국어 음성 합성 지원
+- 응답 형식: `audio/mpeg` (스트리밍)
 
 **상태**: 완료 및 운영 중
 
@@ -85,8 +89,8 @@ LLM Gateway 프로젝트의 1차 개발이 완료되었습니다. 이 보고서�
 **기능**:
 - STT → ChatGPT → TTS 파이프라인 통합
 - 단일 API 호출로 전체 처리
-- JSON 및 오디오 형식 응답 지원
-- 오디오 스트리밍 문제 해결
+- 응답 형식: `json` (기본, 텍스트 + Base64 오디오) 또는 `audio` (오디오만)
+- Query 파라미터: `session_id`, `voice`, `model`, `response_format`
 
 **상태**: 완료 및 운영 중
 
@@ -99,6 +103,7 @@ LLM Gateway 프로젝트의 1차 개발이 완료되었습니다. 이 보고서�
 - 스트리밍 응답 전송
 - 세션 히스토리 자동 관리
 - 세션 복원 지원
+- Query 파라미터: `session_id`
 
 **상태**: 완료 및 운영 중
 
@@ -115,6 +120,7 @@ LLM Gateway 프로젝트의 1차 개발이 완료되었습니다. 이 보고서�
 - 음성 지문 등록 및 관리
 - 한국어 키워드 지원
 - Base64 오디오 데이터 저장
+- Query 파라미터: `base_keyword`, `session_id`
 
 **상태**: 완료 및 운영 중
 
@@ -131,12 +137,26 @@ LLM Gateway 프로젝트의 1차 개발이 완료되었습니다. 이 보고서�
 
 **상태**: 완료 및 운영 중
 
-### 8. 데이터베이스 자동 초기화 ✅
+### 8. Health Check ✅
+
+**엔드포인트**: `GET /`
 
 **기능**:
-- 테이블 자동 생성
+- 서버 상태 확인
+- Redis 연결 상태 확인
+- 데이터베이스 연결 상태 및 스키마 정보 확인
+- OpenAI API 키 설정 확인
+- 사용 가능한 엔드포인트 목록 반환
+
+**상태**: 완료 및 운영 중
+
+### 9. 데이터베이스 자동 초기화 ✅
+
+**기능**:
+- 테이블 자동 생성 (5개 테이블)
 - 사용자 권한 자동 부여
 - 스키마 마이그레이션 지원
+- 테이블 검증 기능
 
 **상태**: 완료 및 운영 중
 
@@ -177,17 +197,32 @@ LLM Gateway 프로젝트의 1차 개발이 완료되었습니다. 이 보고서�
 - **Python 파일**: 2,826줄
 - **문서 파일**: 48개
 - **테스트 파일**: 포함 (unit, integration, e2e)
-- **주요 커밋**: 8개
+- **주요 커밋**: 10개 이상
 
 ### 주요 변경사항
 - **파일 변경**: 50개 이상
-- **추가된 기능**: 8개 주요 기능
-- **해결된 문제**: 5개
+- **추가된 기능**: 9개 주요 기능 (Health Check 포함)
+- **해결된 문제**: 5개 이상
+
+### API 엔드포인트
+- **총 엔드포인트**: 12개
+  - POST: 7개
+  - GET: 3개
+  - DELETE: 1개
+  - WebSocket: 1개
+
+### 데이터베이스
+- **테이블 수**: 5개
+  - `conversation_sessions`
+  - `conversation_messages`
+  - `api_request_logs`
+  - `cost_logs`
+  - `keyword_voiceprints`
 
 ### 문서화
 - **API 문서**: 6개
 - **가이드 문서**: 9개
-- **리포트 문서**: 15개
+- **리포트 문서**: 20개 이상
 - **데이터베이스 문서**: 5개
 
 ---
