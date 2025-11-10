@@ -348,6 +348,105 @@ Content-Type: application/json
 }
 ```
 
+**응답**: `audio/mpeg` (스트리밍)
+
+### 통합 음성 처리
+
+```http
+POST /api/voice/process
+Content-Type: multipart/form-data
+
+audio: [음성 파일]
+session_id: user123 (query parameter)
+voice: alloy (query parameter, optional)
+model: gpt-4o-mini (query parameter, optional)
+response_format: json (query parameter, optional: json 또는 audio)
+```
+
+**응답 형식**:
+- `json` (기본): `{"text": "...", "response": "...", "audio_base64": "..."}`
+- `audio`: 오디오 파일만 (MP3)
+
+### 키워드 인식
+
+```http
+POST /api/keyword/check
+Content-Type: application/json
+
+{
+  "base_keyword": "alfred",
+  "stt_result": "rarpred"
+}
+```
+
+**응답 예시:**
+```json
+{
+  "is_keyword": true,
+  "activate": true,
+  "matched_keyword": "rarpred",
+  "similarity": 0.95,
+  "voiceprint_id": 1
+}
+```
+
+### 음성 지문 등록
+
+```http
+POST /api/keyword/voiceprint/register
+Content-Type: application/json
+
+{
+  "base_keyword": "alfred",
+  "stt_keyword": "rarpred",
+  "audio_data": "base64_encoded_audio",
+  "session_id": "user123",
+  "user_id": "user1" (optional)
+}
+```
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "voiceprint_id": 1,
+  "is_new": true,
+  "message": "새로운 음성 지문이 등록되었습니다"
+}
+```
+
+### 음성 지문 조회
+
+```http
+GET /api/keyword/voiceprint?base_keyword=alfred&session_id=user123
+```
+
+**응답 예시:**
+```json
+{
+  "success": true,
+  "voiceprints": [
+    {
+      "id": 1,
+      "base_keyword": "alfred",
+      "stt_keyword": "rarpred",
+      "session_id": "user123",
+      "created_at": "2025-11-10T12:00:00",
+      "has_audio": true
+    }
+  ],
+  "count": 1
+}
+```
+
+### WebSocket 실시간 통신
+
+```http
+WS /ws/voice?session_id=user123
+```
+
+실시간 양방향 통신, 스트리밍 응답 전송, 세션 히스토리 자동 관리
+
 **응답:** MP3 형식의 음성 파일 (스트리밍)
 
 ### 통합 음성 처리

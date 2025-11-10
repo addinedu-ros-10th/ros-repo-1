@@ -205,7 +205,7 @@ AI/llm-gateway/
    - 대화 메시지 저장
    - 세션별 메시지 히스토리
 
-3. **api_requests**
+3. **api_request_logs**
    - API 요청 로그
    - 엔드포인트, 메서드, 처리 시간, 상태 코드
 

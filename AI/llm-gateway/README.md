@@ -139,7 +139,7 @@ AI/llm-gateway/
 
 ### 1. 사전 요구사항
 
-- Python 3.11 이상 (로컬 개발 시)
+- Python 3.11 이상 (로컬 개발 시, requirements.txt 확인)
 - Docker & Docker Compose (운영 환경 권장)
 - OpenAI API 키
 - PostgreSQL 데이터베이스 (외부 DB 사용)
@@ -317,36 +317,61 @@ open http://localhost:8000/tests/user_testing/test_voice.html
 POST /api/stt
 Content-Type: multipart/form-data
 Body: audio file
+Response: {"success": true, "text": "...", "language": "ko"}
 ```
 
 ### 텍스트 채팅
 ```
 POST /api/chat
 Content-Type: application/json
-Body: {"message": "안녕하세요", "session_id": "user123"}
+Body: {"message": "안녕하세요", "session_id": "user123", "model": "gpt-4o-mini"}
+Response: {"success": true, "response": "...", "session_id": "...", "model": "..."}
 ```
 
 ### 스트리밍 채팅
 ```
 POST /api/chat/stream
 Content-Type: application/json
-Response: text/event-stream
+Body: {"message": "안녕하세요", "session_id": "user123"}
+Response: text/event-stream (Server-Sent Events)
 ```
 
 ### TTS (Text-to-Speech)
 ```
 POST /api/tts
 Content-Type: application/json
-Body: {"text": "안녕하세요", "voice": "alloy"}
-Response: audio/mpeg
+Body: {"text": "안녕하세요", "voice": "alloy", "model": "tts-1"}
+Response: audio/mpeg (스트리밍)
 ```
 
 ### 통합 음성 처리
 ```
 POST /api/voice/process
 Content-Type: multipart/form-data
-Body: audio file, session_id, voice
-Response: multipart/mixed (metadata + audio)
+Body: audio file, session_id (query), voice (query), model (query), response_format (query)
+Response: json (기본) 또는 audio/mpeg
+```
+
+### 키워드 인식
+```
+POST /api/keyword/check
+Content-Type: application/json
+Body: {"base_keyword": "alfred", "stt_result": "rarpred"}
+Response: {"is_keyword": true, "activate": true, "matched_keyword": "...", "similarity": 0.95}
+```
+
+### 음성 지문 등록
+```
+POST /api/keyword/voiceprint/register
+Content-Type: application/json
+Body: {"base_keyword": "alfred", "stt_keyword": "rarpred", "audio_data": "...", "session_id": "..."}
+Response: {"success": true, "voiceprint_id": 1, "is_new": true}
+```
+
+### 음성 지문 조회
+```
+GET /api/keyword/voiceprint?base_keyword=alfred&session_id=...
+Response: {"success": true, "voiceprints": [...], "count": 1}
 ```
 
 ### WebSocket 실시간 통신
@@ -354,9 +379,19 @@ Response: multipart/mixed (metadata + audio)
 WS /ws/voice?session_id=user123
 ```
 
+### 세션 관리
+```
+GET /api/session/{session_id}
+Response: {"success": true, "session_id": "...", "messages": [...]}
+
+DELETE /api/session/{session_id}
+Response: {"success": true, "message": "세션이 삭제되었습니다"}
+```
+
 ### Health Check
 ```
 GET /
+Response: {"status": "running", "service": "Voice Interface API", "version": "1.0.0", "services": {...}, "endpoints": {...}}
 ```
 
 ---
