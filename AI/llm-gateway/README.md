@@ -21,7 +21,7 @@ OpenAI Whisper (STT) + ChatGPT + TTS 통합 API 서버로, 실시간 대화 방�
 
 ## 📁 프로젝트 구조
 
-> 📖 **상세 구조 설명**: [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) 참고
+> 📖 **상세 구조 설명**: [PROJECT_STRUCTURE.md](docs/guides/PROJECT_STRUCTURE.md) 참고
 
 ```
 AI/llm-gateway/
@@ -402,7 +402,7 @@ mypy src/
 
 ## 📚 추가 문서
 
-- [개발 현황 리포트](docs/DEVELOPMENT_STATUS.md)
+- [개발 현황 리포트](docs/reports/DEVELOPMENT_STATUS.md)
 - [디버깅 리포트](docs/DEBUG_REPORT.md)
 - [데이터베이스 스키마](docs/database_schema.md)
 

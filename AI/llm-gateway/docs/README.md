@@ -10,6 +10,7 @@ docs/
 ├── commits/          # 커밋 메시지 및 변경 이력
 ├── database/         # 데이터베이스 관련 문서 및 SQL 스크립트
 ├── guides/           # 사용자 가이드 및 테스트 가이드
+├── plans/            # 개발 계획 및 TODO
 └── reports/          # 개발 리포트 및 상태 보고서
 ```
 
@@ -36,6 +37,10 @@ docs/
 - WebSocket 테스트 가이드
 - Voiceprint 테스트 가이드
 - Docker 설정 가이드
+
+### 개발 계획 (`plans/`)
+- 2차 개발 TODO
+- 향후 개발 계획
 
 ### 리포트 (`reports/`)
 - 개발 현황 리포트

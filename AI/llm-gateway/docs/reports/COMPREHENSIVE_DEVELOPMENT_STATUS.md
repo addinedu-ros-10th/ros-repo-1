@@ -505,7 +505,7 @@ uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 ### 주요 문서
 
 - [프로젝트 README](../README.md)
-- [프로젝트 구조 가이드](../PROJECT_STRUCTURE.md)
+- [프로젝트 구조 가이드](../guides/PROJECT_STRUCTURE.md)
 - [문서 인덱스](../README.md)
 
 ### 외부 참고 자료
