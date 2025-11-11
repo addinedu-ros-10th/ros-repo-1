@@ -93,27 +93,48 @@ def run_migrations_online() -> None:
 def include_object(object, name, type_, reflected, compare_to):
     """
     비삭제 정책을 위한 객체 필터링
-    레거시 테이블은 제외하고 신규 스키마만 관리
+    관리 대상 테이블만 포함하여 기존 테이블 보호
     """
     # 테이블인 경우
     if type_ == "table":
-        # 레거시 테이블 제외 (legacy_ 접두사)
-        if name.startswith("legacy_"):
-            return False
-        # 시스템 테이블 제외
-        if name in ["alembic_version"]:
+        # 관리 대상 테이블 목록 (화이트리스트)
+        # 이 목록에 있는 테이블만 Alembic이 관리
+        managed_tables = {
+            "scheduled_jobs",  # 기존 관리 테이블
+            "detection_event",  # 신규: 로봇 인식 이벤트
+            "marker_registry",  # 신규: ArUco 마커 레지스트리
+            "text_registry",    # 신규: OCR 텍스트 레지스트리
+            "face_registry",    # 신규: 얼굴 레지스트리
+            "person_registry",  # 신규: 전신/개인 프로필 레지스트리
+        }
+        
+        # 관리 대상 테이블만 포함
+        if name in managed_tables:
             return True
-        # 신규 스키마 테이블만 포함
-        return True
+        
+        # 시스템 테이블 (alembic_version)은 항상 포함
+        if name == "alembic_version":
+            return True
+        
+        # 기타 테이블은 제외 (기존 테이블 보호)
+        # 이렇게 하면 autogenerate 시에도 기존 테이블이 변경되지 않음
+        return False
     
     # 인덱스인 경우
     if type_ == "index":
+        # 관리 대상 테이블의 인덱스만 포함
+        # 인덱스 이름에서 테이블 이름 추출 (일반적인 패턴)
+        for table_name in ["scheduled_jobs", "detection_event", "marker_registry", 
+                          "text_registry", "face_registry", "person_registry"]:
+            if name.startswith(f"ix_{table_name}") or name.startswith(f"idx_{table_name}"):
+                return True
         # 레거시 테이블의 인덱스 제외
         if name.startswith("ix_legacy_"):
             return False
-        return True
+        # 기타 인덱스는 제외 (안전을 위해)
+        return False
     
-    # 기타 객체는 포함
+    # 기타 객체 (제약조건, 시퀀스 등)는 포함
     return True
 
 
