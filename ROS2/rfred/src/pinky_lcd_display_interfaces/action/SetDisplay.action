@@ -1,0 +1,17 @@
+# Goal
+string title                    # 타이틀 텍스트
+string[] lines                  # 본문 라인들
+bool show_timestamp             # 타임스탬프 표시 여부
+uint32 duration_ms              # 표시 지속 시간 (밀리초, 0이면 무한)
+uint8 animation_type            # 0: NONE, 1: FADE_IN, 2: SLIDE
+---
+# Result
+bool success                    # 성공 여부
+string message                  # 결과 메시지
+uint32 actual_duration_ms      # 실제 표시 시간
+---
+# Feedback
+uint32 elapsed_ms               # 경과 시간 (밀리초)
+uint8 progress_percent          # 진행률 (0-100)
+string status_message           # 상태 메시지
+

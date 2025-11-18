@@ -1,0 +1,32 @@
+# Request
+# 배경 색상 (RGB, 0-255)
+uint8 bg_color_r
+uint8 bg_color_g
+uint8 bg_color_b
+
+# 타이틀 색상 (RGB, 0-255)
+uint8 title_color_r
+uint8 title_color_g
+uint8 title_color_b
+
+# 본문 색상 (RGB, 0-255)
+uint8 body_color_r
+uint8 body_color_g
+uint8 body_color_b
+
+# 타임스탬프 색상 (RGB, 0-255)
+uint8 timestamp_color_r
+uint8 timestamp_color_g
+uint8 timestamp_color_b
+
+# 폰트 크기
+uint8 title_font_size           # 타이틀 폰트 크기 (기본값: 20)
+uint8 body_font_size           # 본문 폰트 크기 (기본값: 18)
+
+# 폰트 경로 (선택사항, 빈 문자열이면 기본값 사용)
+string font_path
+---
+# Response
+bool success
+string message
+
