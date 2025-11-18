@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>음성 인터페이스 테스트 (STT/TTS)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+        }
+        .tab {
+            padding: 10px 20px;
+            background-color: #f8f9fa;
+            border: none;
+            border-radius: 5px 5px 0 0;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            background-color: #007bff;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            padding: 12px 24px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button.recording {
+            background-color: #dc3545;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        button.playing {
+            background-color: #28a745;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+            margin: 10px 0;
+        }
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #007bff;
+            transition: width 0.3s;
+        }
+        .result {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #007bff;
+        }
+        .result h4 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        .recording-time {
+            font-size: 18px;
+            font-weight: bold;
+            color: #dc3545;
+            margin: 10px 0;
+        }
+        .session-info {
+            padding: 10px;
+            background-color: #e7f3ff;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+        .session-info input {
+            width: 300px;
+            padding: 5px;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 음성 인터페이스 테스트</h1>
+        
+        <div class="session-info">
+            <strong>세션 ID:</strong> 
+            <input type="text" id="sessionIdInput" placeholder="세션 ID (선택사항, 기본값: default)">
+            <button onclick="updateSessionId()">세션 ID 업데이트</button>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('stt')">STT (음성→텍스트)</button>
+            <button class="tab" onclick="switchTab('tts')">TTS (텍스트→음성)</button>
+            <button class="tab" onclick="switchTab('integrated')">통합 테스트</button>
+        </div>
+        
+        <!-- STT 탭 -->
+        <div id="stt-tab" class="tab-content active">
+            <div class="section">
+                <h3>1. 음성 녹음</h3>
+                <p>마이크를 사용하여 음성을 녹음합니다.</p>
+                <button id="recordBtn" onclick="startRecording()">🎤 녹음 시작</button>
+                <button id="stopRecordBtn" onclick="stopRecording()" disabled>⏹️ 녹음 중지</button>
+                <div class="recording-time" id="recordingTime" style="display: none;">00:00</div>
+                <div class="progress" id="recordingProgress" style="display: none;">
+                    <div class="progress-bar" id="recordingProgressBar" style="width: 0%;"></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>2. STT 변환 (음성 → 텍스트)</h3>
+                <p>녹음된 음성을 텍스트로 변환합니다.</p>
+                <button onclick="convertSpeechToText()" id="sttBtn" disabled>🔄 텍스트로 변환</button>
+                <div id="sttStatus"></div>
+                <div class="result" id="sttResult" style="display: none;">
+                    <h4>변환 결과:</h4>
+                    <p id="sttText"></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- TTS 탭 -->
+        <div id="tts-tab" class="tab-content">
+            <div class="section">
+                <h3>텍스트 입력</h3>
+                <textarea id="ttsTextInput" placeholder="음성으로 변환할 텍스트를 입력하세요...">안녕하세요. 음성 인터페이스 테스트입니다.</textarea>
+            </div>
+            
+            <div class="section">
+                <h3>TTS 변환 (텍스트 → 음성)</h3>
+                <p>텍스트를 음성으로 변환하고 재생합니다.</p>
+                <button onclick="convertTextToSpeech()" id="ttsBtn">🔊 음성 생성 및 재생</button>
+                <div id="ttsStatus"></div>
+                <div class="audio-controls" id="audioControls" style="display: none;">
+                    <audio id="audioPlayer" controls></audio>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 통합 테스트 탭 -->
+        <div id="integrated-tab" class="tab-content">
+            <div class="section">
+                <h3>1. 음성 입력</h3>
+                <p>마이크로 질문을 녹음합니다.</p>
+                <button id="integratedRecordBtn" onclick="startIntegratedRecording()">🎤 녹음 시작</button>
+                <button id="integratedStopRecordBtn" onclick="stopIntegratedRecording()" disabled>⏹️ 녹음 중지</button>
+                <div class="recording-time" id="integratedRecordingTime" style="display: none;">00:00</div>
+            </div>
+            
+            <div class="section">
+                <h3>2. 처리 단계</h3>
+                <div id="integratedStatus"></div>
+                <div class="progress" id="integratedProgress" style="display: none;">
+                    <div class="progress-bar" id="integratedProgressBar" style="width: 0%;"></div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>3. 결과</h3>
+                <div class="result" id="integratedResult" style="display: none;">
+                    <h4>STT 결과 (사용자 질문):</h4>
+                    <p id="integratedSttText"></p>
+                    <h4>ChatGPT 응답:</h4>
+                    <p id="integratedChatText"></p>
+                    <h4>음성 응답:</h4>
+                    <div class="audio-controls" id="integratedAudioControls" style="display: none;">
+                        <audio id="integratedAudioPlayer" controls></audio>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000';
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recordingTimer = null;
+        let recordingStartTime = null;
+        let currentSessionId = 'default';
+
+        // 세션 ID 업데이트
+        function updateSessionId() {
+            const input = document.getElementById('sessionIdInput');
+            currentSessionId = input.value || 'default';
+            showStatus('info', `세션 ID가 ${currentSessionId}로 설정되었습니다.`, 'integratedStatus');
+        }
+
+        // 탭 전환
+        function switchTab(tabName) {
+            // 모든 탭 숨기기
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // 선택된 탭 표시
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // 상태 메시지 표시
+        function showStatus(type, message, containerId) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        // 녹음 시간 포맷
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // 녹음 시작
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = () => {
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                mediaRecorder.start();
+                recordingStartTime = Date.now();
+                
+                document.getElementById('recordBtn').disabled = true;
+                document.getElementById('recordBtn').classList.add('recording');
+                document.getElementById('stopRecordBtn').disabled = false;
+                document.getElementById('recordingTime').style.display = 'block';
+                document.getElementById('recordingProgress').style.display = 'block';
+                document.getElementById('sttBtn').disabled = false;
+                
+                // 녹음 시간 업데이트
+                recordingTimer = setInterval(() => {
+                    const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                    document.getElementById('recordingTime').textContent = formatTime(elapsed);
+                }, 100);
+                
+                showStatus('success', '녹음이 시작되었습니다.', 'sttStatus');
+            } catch (error) {
+                showStatus('error', `녹음 시작 실패: ${error.message}`, 'sttStatus');
+            }
+        }
+
+        // 녹음 중지
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                clearInterval(recordingTimer);
+                
+                document.getElementById('recordBtn').disabled = false;
+                document.getElementById('recordBtn').classList.remove('recording');
+                document.getElementById('stopRecordBtn').disabled = true;
+                
+                showStatus('success', '녹음이 완료되었습니다.', 'sttStatus');
+            }
+        }
+
+        // STT 변환
+        async function convertSpeechToText() {
+            if (audioChunks.length === 0) {
+                showStatus('error', '녹음된 음성이 없습니다.', 'sttStatus');
+                return;
+            }
+            
+            try {
+                showStatus('info', '음성을 텍스트로 변환 중...', 'sttStatus');
+                
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                
+                const response = await fetch(`${API_BASE_URL}/api/stt`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('sttText').textContent = data.text;
+                    document.getElementById('sttResult').style.display = 'block';
+                    showStatus('success', '텍스트 변환 완료!', 'sttStatus');
+                } else {
+                    showStatus('error', `변환 실패: ${data.error || '알 수 없는 오류'}`, 'sttStatus');
+                }
+            } catch (error) {
+                showStatus('error', `변환 오류: ${error.message}`, 'sttStatus');
+            }
+        }
+
+        // TTS 변환
+        async function convertTextToSpeech() {
+            const text = document.getElementById('ttsTextInput').value.trim();
+            if (!text) {
+                showStatus('error', '텍스트를 입력하세요.', 'ttsStatus');
+                return;
+            }
+            
+            try {
+                showStatus('info', '음성 생성 중...', 'ttsStatus');
+                document.getElementById('ttsBtn').disabled = true;
+                
+                const response = await fetch(`${API_BASE_URL}/api/tts`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: text,
+                        voice: 'alloy',
+                        model: 'tts-1'
+                    })
+                });
+                
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    const audioPlayer = document.getElementById('audioPlayer');
+                    audioPlayer.src = audioUrl;
+                    document.getElementById('audioControls').style.display = 'block';
+                    showStatus('success', '음성 생성 완료! 재생 버튼을 클릭하세요.', 'ttsStatus');
+                } else {
+                    const error = await response.json();
+                    showStatus('error', `음성 생성 실패: ${error.detail || '알 수 없는 오류'}`, 'ttsStatus');
+                }
+            } catch (error) {
+                showStatus('error', `음성 생성 오류: ${error.message}`, 'ttsStatus');
+            } finally {
+                document.getElementById('ttsBtn').disabled = false;
+            }
+        }
+
+        // 통합 테스트용 녹음 시작
+        async function startIntegratedRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+                
+                mediaRecorder.onstop = () => {
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                mediaRecorder.start();
+                recordingStartTime = Date.now();
+                
+                document.getElementById('integratedRecordBtn').disabled = true;
+                document.getElementById('integratedRecordBtn').classList.add('recording');
+                document.getElementById('integratedStopRecordBtn').disabled = false;
+                document.getElementById('integratedRecordingTime').style.display = 'block';
+                
+                recordingTimer = setInterval(() => {
+                    const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                    document.getElementById('integratedRecordingTime').textContent = formatTime(elapsed);
+                }, 100);
+                
+                showStatus('success', '녹음이 시작되었습니다.', 'integratedStatus');
+            } catch (error) {
+                showStatus('error', `녹음 시작 실패: ${error.message}`, 'integratedStatus');
+            }
+        }
+
+        // 통합 테스트용 녹음 중지
+        function stopIntegratedRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                clearInterval(recordingTimer);
+                
+                document.getElementById('integratedRecordBtn').disabled = false;
+                document.getElementById('integratedRecordBtn').classList.remove('recording');
+                document.getElementById('integratedStopRecordBtn').disabled = true;
+                
+                // 자동으로 통합 처리 시작
+                processIntegratedVoice();
+            }
+        }
+
+        // 통합 음성 처리 (STT → ChatGPT → TTS)
+        async function processIntegratedVoice() {
+            if (audioChunks.length === 0) {
+                showStatus('error', '녹음된 음성이 없습니다.', 'integratedStatus');
+                return;
+            }
+            
+            try {
+                showStatus('info', '음성 처리 중... (STT → ChatGPT → TTS)', 'integratedStatus');
+                document.getElementById('integratedProgress').style.display = 'block';
+                updateProgress(0);
+                
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                formData.append('session_id', currentSessionId);
+                formData.append('voice', 'alloy');
+                formData.append('model', 'gpt-4o-mini');
+                
+                updateProgress(20);
+                
+                const response = await fetch(`${API_BASE_URL}/api/voice/process`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                updateProgress(60);
+                
+                if (response.ok) {
+                    // Multipart 응답 파싱 (ArrayBuffer 사용)
+                    const arrayBuffer = await response.arrayBuffer();
+                    const decoder = new TextDecoder();
+                    const text = decoder.decode(arrayBuffer);
+                    const boundary = 'boundary';
+                    const parts = text.split(`--${boundary}`);
+                    
+                    let jsonData = null;
+                    let audioData = null;
+                    
+                    for (const part of parts) {
+                        if (part.includes('Content-Type: application/json')) {
+                            const jsonStart = part.indexOf('{');
+                            const jsonEnd = part.lastIndexOf('}') + 1;
+                            if (jsonStart >= 0 && jsonEnd > jsonStart) {
+                                try {
+                                    jsonData = JSON.parse(part.substring(jsonStart, jsonEnd));
+                                } catch (e) {
+                                    console.error('JSON 파싱 오류:', e);
+                                }
+                            }
+                        } else if (part.includes('Content-Type: audio/mpeg')) {
+                            // 오디오 데이터 추출 (바이너리 데이터)
+                            const headerEnd = part.indexOf('\r\n\r\n');
+                            if (headerEnd >= 0) {
+                                const audioStart = headerEnd + 4;
+                                const boundaryEnd = part.indexOf(`\r\n--${boundary}`, audioStart);
+                                const audioEnd = boundaryEnd > audioStart ? boundaryEnd : part.length;
+                                
+                                // 바이너리 데이터 추출
+                                const audioBytes = new Uint8Array(arrayBuffer.slice(
+                                    text.indexOf(part) + audioStart,
+                                    text.indexOf(part) + audioEnd
+                                ));
+                                const audioBlob = new Blob([audioBytes], { type: 'audio/mpeg' });
+                                audioData = URL.createObjectURL(audioBlob);
+                            }
+                        }
+                    }
+                    
+                    // 더 간단한 방법: 직접 Blob로 받기 (JSON은 별도 요청)
+                    if (!jsonData || !audioData) {
+                        // 대체 방법: blob로 받아서 사용
+                        const audioBlob = await response.blob();
+                        audioData = URL.createObjectURL(audioBlob);
+                        
+                        // JSON은 별도로 가져오거나, 사용하지 않음
+                        if (!jsonData) {
+                            jsonData = { user_text: 'N/A', assistant_text: 'N/A' };
+                        }
+                    }
+                    
+                    updateProgress(100);
+                    
+                    if (jsonData) {
+                        document.getElementById('integratedSttText').textContent = jsonData.user_text || 'N/A';
+                        document.getElementById('integratedChatText').textContent = jsonData.assistant_text || 'N/A';
+                    }
+                    
+                    if (audioData) {
+                        const audioPlayer = document.getElementById('integratedAudioPlayer');
+                        audioPlayer.src = audioData;
+                        document.getElementById('integratedAudioControls').style.display = 'block';
+                    }
+                    
+                    document.getElementById('integratedResult').style.display = 'block';
+                    showStatus('success', '음성 처리 완료!', 'integratedStatus');
+                } else {
+                    const error = await response.json();
+                    showStatus('error', `처리 실패: ${error.detail || '알 수 없는 오류'}`, 'integratedStatus');
+                }
+            } catch (error) {
+                showStatus('error', `처리 오류: ${error.message}`, 'integratedStatus');
+            } finally {
+                setTimeout(() => {
+                    document.getElementById('integratedProgress').style.display = 'none';
+                }, 1000);
+            }
+        }
+
+        // 진행률 업데이트
+        function updateProgress(percent) {
+            document.getElementById('integratedProgressBar').style.width = `${percent}%`;
+        }
+    </script>
+</body>
+</html>
+

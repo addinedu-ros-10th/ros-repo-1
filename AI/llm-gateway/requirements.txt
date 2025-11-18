@@ -1,0 +1,24 @@
+# FastAPI 및 서버 관련
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+aiofiles>=23.2.0
+
+# OpenAI API
+openai>=1.3.0
+
+# 환경변수 관리
+pydantic-settings>=2.0.0
+pydantic>=2.4.0
+
+# 데이터베이스 (외부 DB 사용)
+psycopg2-binary>=2.9.9  # PostgreSQL 드라이버
+sqlalchemy>=2.0.23  # SQLAlchemy ORM
+
+# Redis (세션 관리)
+redis>=5.0.0
+aioredis>=2.0.1
+
+# WebSocket 테스트 (선택사항)
+websockets>=12.0  # Python 클라이언트 테스트용
+
