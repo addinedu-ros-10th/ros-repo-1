@@ -106,7 +106,7 @@ ROS2 토픽, 서비스, 액션을 통해 로봇을 원격으로 제어할 수 �
 ### 2025-11-18: 사용 가이드 작성
 
 #### 추가된 문서
-1. **USAGE_GUIDE.md** (18KB, 722줄)
+1. **[USAGE_GUIDE.md](../guides/USAGE_GUIDE.md)** (18KB, 722줄)
    - 전체 사용 가이드 문서
    - 빌드 및 실행 방법
    - 패키지별 상세 사용법
@@ -139,7 +139,7 @@ ROS2 토픽, 서비스, 액션을 통해 로봇을 원격으로 제어할 수 �
 ### 문서 규모
 - **README 파일**: 3개
 - **상세 문서**: 20개 이상
-- **사용 가이드**: 1개 (USAGE_GUIDE.md)
+- **사용 가이드**: 1개 ([USAGE_GUIDE.md](../guides/USAGE_GUIDE.md))
 
 ### 패키지 수
 - **ROS2 패키지**: 3개
@@ -208,7 +208,7 @@ ROS2 토픽, 서비스, 액션을 통해 로봇을 원격으로 제어할 수 �
 - 없음
 
 ### 해결된 이슈
-- ✅ 사용 가이드 부재 → USAGE_GUIDE.md 작성 완료
+- ✅ 사용 가이드 부재 → [USAGE_GUIDE.md](../guides/USAGE_GUIDE.md) 작성 완료
 - ✅ README 간소화 → 빠른 시작 가이드 추가
 
 ---
@@ -235,8 +235,9 @@ ROS2 토픽, 서비스, 액션을 통해 로봇을 원격으로 제어할 수 �
 ## 참고 문서
 
 ### 프로젝트 문서
-- [전체 사용 가이드](USAGE_GUIDE.md)
-- [프로젝트 README](README.md)
+- [전체 사용 가이드](../guides/USAGE_GUIDE.md)
+- [프로젝트 README](../../README.md)
+- [프로젝트 상태 리포트](PROJECT_STATUS_REPORT.md)
 
 ### 패키지별 문서
 - [pinky_state_machine README](src/pinky_state_machine/README.md)

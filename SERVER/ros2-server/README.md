@@ -43,7 +43,7 @@ ros2 run pinky_lcd_display_controller lcd_controller_server
 
 ## 상세 사용 가이드
 
-**📖 [전체 사용 가이드](USAGE_GUIDE.md)** - 빌드, 실행, 네트워크 설정, 문제 해결 등 모든 내용을 포함합니다.
+**📖 [전체 사용 가이드](docs/guides/USAGE_GUIDE.md)** - 빌드, 실행, 네트워크 설정, 문제 해결 등 모든 내용을 포함합니다.
 
 ## 패키지
 
