@@ -1132,14 +1132,26 @@
                     }
                 }
                 
+                // Function Calling 안내로 감싸기
+                const wrappedSystemPrompt = wrapSystemPromptWithToolInstructions(systemPrompt);
+                
                 // 프롬프트 엔지니어링 로그 출력
                 console.group('🔧 음성 메시지 - 프롬프트 엔지니어링 정보');
                 console.log('📝 원본 System Prompt:', systemPrompt || '(기본 프롬프트 사용)');
-                console.log('🛠️ Function Calling 안내: 서버에서 자동 추가됨');
+                console.log('🛠️ Function Calling 안내 포함:', wrappedSystemPrompt ? '예' : '아니오');
+                if (wrappedSystemPrompt) {
+                    console.log('📋 최종 System Prompt (일부):', wrappedSystemPrompt.substring(0, 200) + '...');
+                }
                 console.log('🆔 Session ID:', currentSessionId);
                 console.groupEnd();
                 
-                const response = await fetch(`${API_BASE}/api/voice/process?session_id=${currentSessionId}`, {
+                // system_prompt와 session_id를 FormData에 추가
+                formData.append('session_id', currentSessionId);
+                if (wrappedSystemPrompt) {
+                    formData.append('system_prompt', wrappedSystemPrompt);
+                }
+                
+                const response = await fetch(`${API_BASE}/api/voice/process`, {
                     method: 'POST',
                     body: formData
                 });

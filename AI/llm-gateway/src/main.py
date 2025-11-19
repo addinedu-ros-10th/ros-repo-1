@@ -8,7 +8,7 @@ OpenAI Whisper (STT) + ChatGPT + TTS 통합
 - config.py에서 환경변수 관리
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, Query, Form
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -871,10 +871,14 @@ async def text_to_speech(request: TTSRequest):
 # ============= 통합 음성 처리 엔드포인트 =============
 
 
-@app.post("/api/voice/process", summary="음성 입력 → 채팅 → 음성 응답 (통합)")
+@app.post("/api/voice/process", summary="음성 입력 → 채팅 → 음성 응답 (통합, Function Calling 지원)")
 async def process_voice(
     audio: UploadFile = File(..., description="음성 파일 (mp3, wav, m4a, webm 등)"),
-    session_id: Optional[str] = Query(default="default", description="세션 ID (대화 히스토리 관리용)"),
+    session_id: Optional[str] = Form(default="default", description="세션 ID (대화 히스토리 관리용)"),
+    system_prompt: Optional[str] = Form(
+        default=None,
+        description="시스템 프롬프트 (None이면 기본값 사용, Function Calling 안내 자동 추가)"
+    ),
     voice: Optional[TTSVoice] = Query(
         default=None,
         description=f"TTS 음성 선택. 옵션: {', '.join([v.value for v in TTSVoice])}. None이면 기본값({settings.default_tts_voice}) 사용"
@@ -931,8 +935,8 @@ async def process_voice(
 
         # 2. Chat: 텍스트 → ChatGPT 응답 (Function Calling 지원)
         # System Prompt에 Function Calling 사용 안내 추가
-        base_system_prompt = settings.default_system_prompt
-        system_prompt = f"""{base_system_prompt}
+        base_system_prompt = system_prompt or settings.default_system_prompt
+        wrapped_system_prompt = f"""{base_system_prompt}
 
 중요: 사용자가 데이터 조회나 API 호출을 요청하면 반드시 제공된 함수를 사용해야 합니다. 일반적인 응답으로 대체하지 마세요.
 
@@ -949,29 +953,29 @@ async def process_voice(
         try:
             messages = await redis_session_manager.get_session(session_id)
             if not messages:
-                messages = await redis_session_manager.initialize_session(session_id, system_prompt)
+                messages = await redis_session_manager.initialize_session(session_id, wrapped_system_prompt)
             else:
                 # 기존 세션이 있어도 System Prompt 업데이트
                 for i, msg in enumerate(messages):
                     if msg.get("role") == "system":
-                        messages[i] = {"role": "system", "content": system_prompt}
+                        messages[i] = {"role": "system", "content": wrapped_system_prompt}
                         break
                 else:
-                    messages.insert(0, {"role": "system", "content": system_prompt})
+                    messages.insert(0, {"role": "system", "content": wrapped_system_prompt})
                 await redis_session_manager.save_session(session_id, messages)
         except Exception:
             if session_id not in fallback_store:
                 fallback_store[session_id] = [
-                    {"role": "system", "content": system_prompt}
+                    {"role": "system", "content": wrapped_system_prompt}
                 ]
             else:
                 messages = fallback_store[session_id]
                 for i, msg in enumerate(messages):
                     if msg.get("role") == "system":
-                        messages[i] = {"role": "system", "content": system_prompt}
+                        messages[i] = {"role": "system", "content": wrapped_system_prompt}
                         break
                 else:
-                    messages.insert(0, {"role": "system", "content": system_prompt})
+                    messages.insert(0, {"role": "system", "content": wrapped_system_prompt})
                 fallback_store[session_id] = messages
             messages = fallback_store[session_id]
 
@@ -1076,7 +1080,7 @@ async def process_voice(
         
         try:
             await redis_session_manager.save_session(session_id, messages)
-            save_conversation_to_db(session_id, messages, system_prompt)
+            save_conversation_to_db(session_id, messages, wrapped_system_prompt)
         except Exception:
             fallback_store[session_id] = messages
 
@@ -1390,6 +1394,11 @@ async def get_voiceprints(
             if session_id:
                 query = query.filter_by(session_id=session_id)
             
+            # 전체 개수 먼저 조회 (디버깅용)
+            total_count = query.count()
+            logger.debug(f"Voiceprint query - total count: {total_count}, base_keyword: {base_keyword}, session_id: {session_id}")
+            
+            # 모든 결과 조회 (제한 없음)
             voiceprints = query.order_by(KeywordVoiceprint.created_at.desc()).all()
             
             result = []
@@ -1405,10 +1414,13 @@ async def get_voiceprints(
                     "has_audio": bool(vp.audio_data)
                 })
             
+            logger.debug(f"Voiceprint query result - returned count: {len(result)}, total count: {total_count}")
+            
             return {
                 "success": True,
                 "voiceprints": result,
-                "count": len(result)
+                "count": len(result),
+                "total_count": total_count  # 전체 개수도 반환 (디버깅용)
             }
     
     except Exception as e:
