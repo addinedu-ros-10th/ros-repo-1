@@ -1236,17 +1236,21 @@ async def check_keyword(request: KeywordCheckRequest):
         
         # DB에서 등록된 keyword 조회
         with db_manager.get_session() as session:
-            # base_keyword 기준으로 등록된 모든 keyword 조회
+            # base_keyword 기준으로 등록된 모든 keyword 조회 (모든 세션의 voiceprint 확인)
+            # 음성 지문은 전역적으로 공유되므로 session_id 필터링 없음
             voiceprints = session.query(KeywordVoiceprint)\
                 .filter_by(base_keyword=request.base_keyword)\
                 .filter_by(is_active=True)\
                 .all()
             
+            logger.debug(f"Keyword check: base_keyword={request.base_keyword}, stt_result={request.stt_result}, found {len(voiceprints)} voiceprints")
+            
             stt_result_lower = request.stt_result.lower().strip()
             
-            # 1. 정확한 매칭 확인
+            # 1. 정확한 매칭 확인 (우선순위 1)
             for vp in voiceprints:
                 if vp.stt_keyword.lower() == stt_result_lower:
+                    logger.info(f"Keyword matched (exact): base_keyword={request.base_keyword}, stt_keyword={vp.stt_keyword}, voiceprint_id={vp.id}")
                     return {
                         "is_keyword": True,
                         "activate": True,
@@ -1255,7 +1259,7 @@ async def check_keyword(request: KeywordCheckRequest):
                         "voiceprint_id": vp.id
                     }
             
-            # 2. Fuzzy matching (유사도 기반)
+            # 2. Fuzzy matching (유사도 기반, 우선순위 2)
             best_match = None
             best_similarity = 0.0
             similarity_threshold = 0.7  # 70% 이상 유사도
@@ -1266,21 +1270,24 @@ async def check_keyword(request: KeywordCheckRequest):
                     best_similarity = similarity
                     best_match = vp
             
-            # base_keyword 자체와도 비교
+            # 3. base_keyword 자체와도 비교 (우선순위 3)
             base_similarity = calculate_similarity(stt_result_lower, request.base_keyword.lower())
             if base_similarity > best_similarity:
                 best_similarity = base_similarity
                 best_match = None  # base_keyword와 매칭
             
             if best_similarity >= similarity_threshold:
+                matched_keyword = best_match.stt_keyword if best_match else request.base_keyword
+                logger.info(f"Keyword matched (fuzzy): base_keyword={request.base_keyword}, matched_keyword={matched_keyword}, similarity={best_similarity:.3f}, voiceprint_id={best_match.id if best_match else None}")
                 return {
                     "is_keyword": True,
                     "activate": True,
-                    "matched_keyword": best_match.stt_keyword if best_match else request.base_keyword,
+                    "matched_keyword": matched_keyword,
                     "similarity": best_similarity,
                     "voiceprint_id": best_match.id if best_match else None
                 }
             else:
+                logger.debug(f"Keyword not matched: base_keyword={request.base_keyword}, stt_result={request.stt_result}, best_similarity={best_similarity:.3f} (threshold={similarity_threshold})")
                 return {
                     "is_keyword": False,
                     "activate": False,
@@ -1313,22 +1320,26 @@ async def register_voiceprint(request: VoiceprintRegisterRequest):
             raise HTTPException(status_code=503, detail="데이터베이스가 초기화되지 않았습니다")
         
         with db_manager.get_session() as session:
-            # 기존 등록 확인
+            # 기존 등록 확인 (session_id 제외 - base_keyword와 stt_keyword 조합으로만 중복 체크)
+            # 음성 지문은 전역적으로 공유되어야 하므로 session_id는 메타데이터로만 사용
             existing = session.query(KeywordVoiceprint)\
                 .filter_by(base_keyword=request.base_keyword)\
                 .filter_by(stt_keyword=request.stt_keyword)\
-                .filter_by(session_id=request.session_id)\
-                .first()
+                .first()  # session_id 필터링 제거
             
             if existing:
                 # 기존 등록 업데이트
                 existing.audio_data = request.audio_data
                 existing.updated_at = datetime.utcnow()
                 existing.is_active = True
+                # session_id는 업데이트하지 않음 (원래 등록한 세션 유지)
+                # user_id는 업데이트 가능 (최신 등록자 정보 반영)
                 if request.user_id:
                     existing.user_id = request.user_id
                 
                 session.commit()
+                
+                logger.info(f"Voiceprint updated: id={existing.id}, base_keyword={request.base_keyword}, stt_keyword={request.stt_keyword}")
                 
                 return {
                     "success": True,
@@ -1342,12 +1353,14 @@ async def register_voiceprint(request: VoiceprintRegisterRequest):
                     base_keyword=request.base_keyword,
                     stt_keyword=request.stt_keyword,
                     audio_data=request.audio_data,
-                    session_id=request.session_id,
+                    session_id=request.session_id,  # 메타데이터로 저장
                     user_id=request.user_id,
                     is_active=True
                 )
                 session.add(new_voiceprint)
                 session.commit()
+                
+                logger.info(f"Voiceprint registered: id={new_voiceprint.id}, base_keyword={request.base_keyword}, stt_keyword={request.stt_keyword}, session_id={request.session_id}")
                 
                 return {
                     "success": True,

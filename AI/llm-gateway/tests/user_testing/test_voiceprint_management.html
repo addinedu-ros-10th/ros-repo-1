@@ -948,11 +948,17 @@
                 
                 if (data.success) {
                     registrationState = 'completed';
-                    updateStatus('success', 
-                        data.is_new 
-                            ? `✅ 새로운 음성 지문이 등록되었습니다 (ID: ${data.voiceprint_id})`
-                            : `🔄 음성 지문이 업데이트되었습니다 (ID: ${data.voiceprint_id})`
-                    );
+                    const message = data.is_new 
+                        ? `✅ 새로운 음성 지문이 등록되었습니다 (ID: ${data.voiceprint_id})`
+                        : `🔄 음성 지문이 업데이트되었습니다 (ID: ${data.voiceprint_id})`;
+                    updateStatus('success', message);
+                    
+                    console.log('✅ 음성 지문 등록 성공:', {
+                        voiceprint_id: data.voiceprint_id,
+                        is_new: data.is_new,
+                        base_keyword: baseKeyword,
+                        stt_keyword: sttKeyword
+                    });
                     
                     // 목록 새로고침
                     await loadVoiceprints();
@@ -1008,7 +1014,21 @@
                 
                 if (data.success && data.voiceprints) {
                     displayVoiceprints(data.voiceprints);
-                    updateStatus('success', `등록된 음성 지문: ${data.voiceprints.length}개`);
+                    const totalCount = data.total_count !== undefined ? data.total_count : data.voiceprints.length;
+                    const returnedCount = data.voiceprints.length;
+                    
+                    if (totalCount !== returnedCount) {
+                        updateStatus('success', `등록된 음성 지문: ${returnedCount}개 / 전체 ${totalCount}개`);
+                        console.warn(`⚠️ 음성 지문 일부만 반환됨: ${returnedCount}개 / 전체 ${totalCount}개`);
+                    } else {
+                        updateStatus('success', `등록된 음성 지문: ${returnedCount}개`);
+                    }
+                    
+                    console.log('✅ 음성 지문 목록 로드 완료:', {
+                        returned: returnedCount,
+                        total: totalCount,
+                        base_keyword: baseKeyword || 'all'
+                    });
                 } else {
                     displayVoiceprints([]);
                 }
