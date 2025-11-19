@@ -325,9 +325,6 @@ async def speech_to_text(
 
 @app.post("/api/chat", summary="텍스트 채팅")
 async def text_chat(request: TextChatRequest):
-
-    print(len(TOOLS))
-    logger.info(f"TOOLS: {TOOLS}")
     """
     텍스트 메시지를 ChatGPT에 전송하고 응답을 받습니다.
     세션별 대화 히스토리 관리 (Redis 사용)
@@ -407,15 +404,6 @@ async def text_chat(request: TextChatRequest):
         iteration = 0
         final_response = None
 
-        logger.info(f"model: {model}")
-        logger.info(f"messages: {messages}")
-        logger.info(f"max_iterations: {max_iterations}")
-        logger.info(f"iteration: {iteration}")
-        logger.info(f"final_response: {final_response}")
-        
-        
-        
-        
         while iteration < max_iterations:
             # tools와 tool_choice는 TOOLS가 비어있지 않을 때만 전달
             api_params = {
@@ -574,11 +562,11 @@ async def text_chat(request: TextChatRequest):
         raise HTTPException(status_code=500, detail=f"채팅 처리 실패: {str(e)}")
 
 
-@app.post("/api/chat/stream", summary="스트리밍 텍스트 채팅")
+@app.post("/api/chat/stream", summary="스트리밍 텍스트 채팅 (Function Calling 지원)")
 async def streaming_chat(request: TextChatRequest):
     """
     텍스트 메시지를 ChatGPT에 전송하고 응답을 스트리밍으로 받습니다.
-    실시간 응답 표시에 적합
+    Function Calling을 지원하여 실시간 스트리밍 중에도 외부 API를 호출할 수 있습니다.
     
     **사용 가능한 모델:**
     - `gpt-4o-mini`: 빠르고 저렴한 모델 (기본값, 추천)
@@ -591,11 +579,32 @@ async def streaming_chat(request: TextChatRequest):
     - `text/event-stream` (Server-Sent Events)
     - 실시간 스트리밍 응답
     - 형식: `data: {"content": "텍스트 청크"}\n\n`
+    - 함수 호출 시: `data: {"tool_call": {...}}\n\n`
+    - 완료 시: `data: {"done": true}\n\n`
+    
+    **Function Calling 흐름:**
+    1. 스트리밍으로 tool_calls 수신
+    2. 함수 실행
+    3. 결과를 포함하여 최종 응답 스트리밍
     """
     async def generate():
         try:
             # 기본값 설정
-            system_prompt = request.system_prompt or settings.default_system_prompt
+            base_system_prompt = request.system_prompt or settings.default_system_prompt
+            # System Prompt에 Function Calling 사용 안내 추가
+            system_prompt = f"""{base_system_prompt}
+
+중요: 사용자가 데이터 조회나 API 호출을 요청하면 반드시 제공된 함수를 사용해야 합니다. 일반적인 응답으로 대체하지 마세요.
+
+사용 가능한 함수:
+1. get_users_list: 사용자가 "사용자 목록", "사용자 리스트", "사용자 목록 보여줘", "사용자 조회" 등을 요청할 때 사용
+2. get_user_profile: 사용자가 "사용자 프로필", "사용자 정보", "사용자 상세" 등을 요청할 때 사용 (user_id 필요)
+3. get_user_relationships: 사용자가 "사용자 관계", "관계 정보" 등을 요청할 때 사용 (user_id 필요)
+
+규칙:
+- 사용자가 데이터 조회를 요청하면 반드시 해당 함수를 호출하세요
+- 함수를 사용할 수 있는 경우 일반적인 응답으로 대체하지 마세요
+- 함수 호출 결과를 받은 후 사용자에게 명확하게 전달하세요"""
             model = request.model.value if request.model else settings.default_chat_model
             
             # 세션 히스토리 관리
@@ -603,45 +612,170 @@ async def streaming_chat(request: TextChatRequest):
                 messages = await redis_session_manager.get_session(request.session_id)
                 if not messages:
                     messages = await redis_session_manager.initialize_session(request.session_id, system_prompt)
+                else:
+                    # 기존 세션이 있어도 System Prompt 업데이트
+                    for i, msg in enumerate(messages):
+                        if msg.get("role") == "system":
+                            messages[i] = {"role": "system", "content": system_prompt}
+                            break
+                    else:
+                        messages.insert(0, {"role": "system", "content": system_prompt})
+                    await redis_session_manager.save_session(request.session_id, messages)
             except Exception:
                 if request.session_id not in fallback_store:
                     fallback_store[request.session_id] = [
                         {"role": "system", "content": system_prompt}
                     ]
+                else:
+                    messages = fallback_store[request.session_id]
+                    for i, msg in enumerate(messages):
+                        if msg.get("role") == "system":
+                            messages[i] = {"role": "system", "content": system_prompt}
+                            break
+                    else:
+                        messages.insert(0, {"role": "system", "content": system_prompt})
+                    fallback_store[request.session_id] = messages
                 messages = fallback_store[request.session_id]
 
             messages.append({"role": "user", "content": request.message})
 
-            # 스트리밍 ChatGPT API 호출
-            # 주의: 스트리밍에서 Function Calling은 복잡하므로,
-            # 함수 호출이 필요한 경우 일반 /api/chat을 사용하는 것을 권장합니다.
-            # 여기서는 기본 스트리밍만 지원합니다.
-            stream = await client.chat.completions.create(
-                model=model,
-                messages=messages,
-                stream=True
-            )
-
-            full_response = ""
-            async for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-                    full_response += content
-                    # SSE 형식으로 전송
-                    yield f"data: {json.dumps({'content': content})}\n\n"
-
-            # 전체 응답 저장
-            messages.append({"role": "assistant", "content": full_response})
+            # Function Calling + Stream 지원
+            max_iterations = 5
+            iteration = 0
             
-            try:
-                await redis_session_manager.save_session(request.session_id, messages)
-                save_conversation_to_db(request.session_id, messages, system_prompt)
-            except Exception:
-                fallback_store[request.session_id] = messages
-
-            yield f"data: {json.dumps({'done': True})}\n\n"
+            while iteration < max_iterations:
+                # 1단계: 스트리밍으로 tool_calls 수신
+                api_params = {
+                    "model": model,
+                    "messages": messages,
+                    "stream": True
+                }
+                
+                # TOOLS가 비어있지 않을 때만 tools와 tool_choice 전달
+                if TOOLS and len(TOOLS) > 0:
+                    api_params["tools"] = TOOLS
+                    api_params["tool_choice"] = "auto"
+                
+                stream = await client.chat.completions.create(**api_params)
+                
+                # tool_calls 수집 변수
+                tool_call_id = None
+                tool_name = None
+                tool_arguments_str = ""
+                full_response = ""
+                has_tool_calls = False
+                
+                # 스트림 처리
+                async for chunk in stream:
+                    choice = chunk.choices[0]
+                    delta = choice.delta
+                    
+                    # (1) 일반 텍스트가 먼저 나올 수도 있음
+                    if delta.content:
+                        full_response += delta.content
+                        yield f"data: {json.dumps({'content': delta.content})}\n\n"
+                    
+                    # (2) tool_calls delta 감지
+                    if delta.tool_calls:
+                        tc = delta.tool_calls[0]
+                        if tc.id:
+                            tool_call_id = tc.id
+                        if tc.function and tc.function.name:
+                            tool_name = tc.function.name
+                        if tc.function and tc.function.arguments:
+                            # arguments는 여러 chunk로 잘려 나오므로 문자열을 이어붙인다
+                            tool_arguments_str += tc.function.arguments
+                    
+                    # (3) finish_reason이 tool_calls면 함수 실행 단계로 넘어감
+                    if choice.finish_reason == "tool_calls":
+                        has_tool_calls = True
+                        break
+                
+                # tool_calls가 없으면 종료
+                if not has_tool_calls:
+                    # 전체 응답 저장
+                    if full_response:
+                        messages.append({"role": "assistant", "content": full_response})
+                        try:
+                            await redis_session_manager.save_session(request.session_id, messages)
+                            save_conversation_to_db(request.session_id, messages, system_prompt)
+                        except Exception:
+                            fallback_store[request.session_id] = messages
+                    
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    break
+                
+                # 2단계: 함수 실행
+                if tool_name and tool_call_id:
+                    try:
+                        # arguments JSON 파싱
+                        tool_args = json.loads(tool_arguments_str or "{}")
+                    except json.JSONDecodeError:
+                        tool_args = {}
+                    
+                    # 함수 실행
+                    logger.info(f"Executing function: {tool_name} with args: {tool_args}")
+                    tool_result = await execute_function(tool_name, tool_args, db_manager)
+                    
+                    # tool_calls 정보를 메시지에 추가
+                    assistant_message = {
+                        "role": "assistant",
+                        "content": full_response if full_response else None,
+                        "tool_calls": [
+                            {
+                                "id": tool_call_id,
+                                "type": "function",
+                                "function": {
+                                    "name": tool_name,
+                                    "arguments": tool_arguments_str
+                                }
+                            }
+                        ]
+                    }
+                    messages.append(assistant_message)
+                    
+                    # tool 결과를 메시지에 추가
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "content": json.dumps(tool_result, ensure_ascii=False)
+                    })
+                    
+                    # tool_call 이벤트 전송
+                    yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'arguments': tool_args}})}\n\n"
+                
+                iteration += 1
+                
+                # 마지막 반복이면 최종 응답 스트리밍
+                if iteration >= max_iterations or not has_tool_calls:
+                    # 3단계: 최종 응답 스트리밍 (tool 결과 포함)
+                    final_stream = await client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        stream=True
+                    )
+                    
+                    final_response = ""
+                    async for chunk in final_stream:
+                        if chunk.choices[0].delta.content:
+                            content = chunk.choices[0].delta.content
+                            final_response += content
+                            yield f"data: {json.dumps({'content': content})}\n\n"
+                    
+                    # 전체 응답 저장
+                    if final_response:
+                        messages.append({"role": "assistant", "content": final_response})
+                        try:
+                            await redis_session_manager.save_session(request.session_id, messages)
+                            save_conversation_to_db(request.session_id, messages, system_prompt)
+                        except Exception:
+                            fallback_store[request.session_id] = messages
+                    
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    break
 
         except Exception as e:
+            logger.error(f"Streaming chat error: {e}", exc_info=True)
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
