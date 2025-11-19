@@ -786,18 +786,36 @@
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let assistantMessageId = addMessage('assistant', '');
+                    let buffer = ''; // 부분 청크를 저장할 버퍼
+                    
+                    console.log('📡 스트리밍 시작');
                     
                     while (true) {
                         const { done, value } = await reader.read();
-                        if (done) break;
+                        if (done) {
+                            console.log('📡 스트리밍 완료 (done)');
+                            break;
+                        }
                         
-                        const chunk = decoder.decode(value);
-                        const lines = chunk.split('\n');
+                        // 버퍼에 추가
+                        buffer += decoder.decode(value, { stream: true });
+                        
+                        // 완전한 라인들을 처리
+                        const lines = buffer.split('\n');
+                        // 마지막 라인은 완전하지 않을 수 있으므로 버퍼에 보관
+                        buffer = lines.pop() || '';
                         
                         for (const line of lines) {
+                            // 빈 줄은 무시
+                            if (!line.trim()) continue;
+                            
                             if (line.startsWith('data: ')) {
                                 try {
-                                    const data = JSON.parse(line.slice(6));
+                                    const jsonStr = line.slice(6); // 'data: ' 제거
+                                    const data = JSON.parse(jsonStr);
+                                    
+                                    console.log('📦 수신 데이터:', data);
+                                    
                                     if (data.content) {
                                         appendToMessage(assistantMessageId, data.content);
                                     }
@@ -812,8 +830,24 @@
                                         addMessage('assistant', '죄송합니다. 오류가 발생했습니다.');
                                     }
                                 } catch (e) {
-                                    // JSON 파싱 실패 무시
+                                    console.warn('⚠️ JSON 파싱 실패:', line, e);
                                 }
+                            }
+                        }
+                    }
+                    
+                    // 남은 버퍼 처리
+                    if (buffer.trim()) {
+                        console.log('📦 남은 버퍼 처리:', buffer);
+                        if (buffer.startsWith('data: ')) {
+                            try {
+                                const jsonStr = buffer.slice(6);
+                                const data = JSON.parse(jsonStr);
+                                if (data.content) {
+                                    appendToMessage(assistantMessageId, data.content);
+                                }
+                            } catch (e) {
+                                console.warn('⚠️ 버퍼 JSON 파싱 실패:', e);
                             }
                         }
                     }
@@ -895,8 +929,19 @@
             const messageDiv = document.getElementById(messageId);
             if (messageDiv) {
                 const textDiv = messageDiv.querySelector('.message-text');
-                textDiv.textContent += text;
-                document.getElementById('chatContainer').scrollTop = document.getElementById('chatContainer').scrollHeight;
+                if (textDiv) {
+                    // textContent를 사용하면 HTML이 이스케이프되지만, 이미 텍스트이므로 안전
+                    textDiv.textContent += text;
+                    // 스크롤을 맨 아래로
+                    const container = document.getElementById('chatContainer');
+                    if (container) {
+                        container.scrollTop = container.scrollHeight;
+                    }
+                } else {
+                    console.warn('⚠️ message-text 요소를 찾을 수 없음:', messageId);
+                }
+            } else {
+                console.warn('⚠️ 메시지 요소를 찾을 수 없음:', messageId);
             }
         }
 
