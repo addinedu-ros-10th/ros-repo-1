@@ -929,31 +929,154 @@ async def process_voice(
         os.unlink(temp_file_path)
         user_text = transcription.text
 
-        # 2. Chat: 텍스트 → ChatGPT 응답
+        # 2. Chat: 텍스트 → ChatGPT 응답 (Function Calling 지원)
+        # System Prompt에 Function Calling 사용 안내 추가
+        base_system_prompt = settings.default_system_prompt
+        system_prompt = f"""{base_system_prompt}
+
+중요: 사용자가 데이터 조회나 API 호출을 요청하면 반드시 제공된 함수를 사용해야 합니다. 일반적인 응답으로 대체하지 마세요.
+
+사용 가능한 함수:
+1. get_users_list: 사용자가 "사용자 목록", "사용자 리스트", "사용자 목록 보여줘", "사용자 조회" 등을 요청할 때 사용
+2. get_user_profile: 사용자가 "사용자 프로필", "사용자 정보", "사용자 상세" 등을 요청할 때 사용 (user_id 필요)
+3. get_user_relationships: 사용자가 "사용자 관계", "관계 정보" 등을 요청할 때 사용 (user_id 필요)
+
+규칙:
+- 사용자가 데이터 조회를 요청하면 반드시 해당 함수를 호출하세요
+- 함수를 사용할 수 있는 경우 일반적인 응답으로 대체하지 마세요
+- 함수 호출 결과를 받은 후 사용자에게 명확하게 전달하세요"""
+        
         try:
             messages = await redis_session_manager.get_session(session_id)
             if not messages:
-                messages = await redis_session_manager.initialize_session(session_id, settings.default_system_prompt)
+                messages = await redis_session_manager.initialize_session(session_id, system_prompt)
+            else:
+                # 기존 세션이 있어도 System Prompt 업데이트
+                for i, msg in enumerate(messages):
+                    if msg.get("role") == "system":
+                        messages[i] = {"role": "system", "content": system_prompt}
+                        break
+                else:
+                    messages.insert(0, {"role": "system", "content": system_prompt})
+                await redis_session_manager.save_session(session_id, messages)
         except Exception:
             if session_id not in fallback_store:
                 fallback_store[session_id] = [
-                    {"role": "system", "content": settings.default_system_prompt}
+                    {"role": "system", "content": system_prompt}
                 ]
+            else:
+                messages = fallback_store[session_id]
+                for i, msg in enumerate(messages):
+                    if msg.get("role") == "system":
+                        messages[i] = {"role": "system", "content": system_prompt}
+                        break
+                else:
+                    messages.insert(0, {"role": "system", "content": system_prompt})
+                fallback_store[session_id] = messages
             messages = fallback_store[session_id]
 
         messages.append({"role": "user", "content": user_text})
 
-        chat_response = await client.chat.completions.create(
-            model=chat_model,
-            messages=messages
-        )
-
-        assistant_text = chat_response.choices[0].message.content
+        # Function Calling 지원
+        max_iterations = 5
+        iteration = 0
+        assistant_text = None
+        
+        while iteration < max_iterations:
+            # tools와 tool_choice는 TOOLS가 비어있지 않을 때만 전달
+            api_params = {
+                "model": chat_model,
+                "messages": messages
+            }
+            
+            # TOOLS가 비어있지 않을 때만 tools와 tool_choice 전달
+            if TOOLS and len(TOOLS) > 0:
+                api_params["tools"] = TOOLS
+                api_params["tool_choice"] = "auto"
+                logger.debug(f"Voice process - iteration: {iteration}, tools provided: {len(TOOLS)}")
+            
+            chat_response = await client.chat.completions.create(**api_params)
+            
+            message = chat_response.choices[0].message
+            
+            # 함수 호출 여부 확인
+            has_tool_calls = (
+                hasattr(message, 'tool_calls') 
+                and message.tool_calls 
+                and len(message.tool_calls) > 0
+                and TOOLS 
+                and len(TOOLS) > 0
+            )
+            
+            # 함수 호출이 없으면 종료
+            if not has_tool_calls:
+                assistant_text = message.content
+                logger.debug(f"Voice process - No tool calls, final response: {assistant_text[:100] if assistant_text else 'None'}")
+                break
+            
+            # TOOLS가 없으면 tool_calls가 있어도 처리하지 않음
+            if not TOOLS or len(TOOLS) == 0:
+                logger.warning("Voice process - Tool calls detected but TOOLS is empty, using content as final response")
+                assistant_text = message.content
+                break
+            
+            # 함수 호출 정보를 메시지에 추가
+            logger.info(f"Voice process - Tool calls detected: {len(message.tool_calls)} calls")
+            assistant_message = {
+                "role": "assistant",
+                "content": message.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments
+                        }
+                    }
+                    for tc in message.tool_calls
+                ]
+            }
+            messages.append(assistant_message)
+            
+            # 함수 실행
+            for tool_call in message.tool_calls:
+                function_name = tool_call.function.name
+                logger.info(f"Voice process - Executing function: {function_name}")
+                try:
+                    arguments = json.loads(tool_call.function.arguments)
+                    logger.debug(f"Voice process - Function arguments: {arguments}")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Voice process - Failed to parse function arguments: {e}")
+                    arguments = {}
+                
+                # 함수 실행
+                result = await execute_function(function_name, arguments, db_manager)
+                logger.info(f"Voice process - Function {function_name} result: success={result.get('success', False)}")
+                
+                # 결과를 메시지에 추가
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result, ensure_ascii=False)
+                })
+            
+            iteration += 1
+        
+        # 최종 응답이 없으면 마지막으로 한 번 더 호출
+        if assistant_text is None:
+            final_response_message = await client.chat.completions.create(
+                model=chat_model,
+                messages=messages
+            )
+            assistant_text = final_response_message.choices[0].message.content
+        
+        # 어시스턴트 응답 저장
         messages.append({"role": "assistant", "content": assistant_text})
         
         try:
             await redis_session_manager.save_session(session_id, messages)
-            save_conversation_to_db(session_id, messages, settings.default_system_prompt)
+            save_conversation_to_db(session_id, messages, system_prompt)
         except Exception:
             fallback_store[session_id] = messages
 
