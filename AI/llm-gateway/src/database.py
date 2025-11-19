@@ -119,6 +119,44 @@ class KeywordVoiceprint(Base):
     )
 
 
+class SystemPrompt(Base):
+    """System Prompt 테이블"""
+    __tablename__ = "system_prompts"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)  # 프롬프트 이름
+    content = Column(Text, nullable=False)  # 프롬프트 내용
+    description = Column(Text, nullable=True)  # 프롬프트 설명 (선택사항)
+    is_default = Column(Boolean, default=False, nullable=False)  # 기본 프롬프트 여부 (여러 개 가능)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # 인덱스
+    __table_args__ = (
+        Index('idx_system_prompts_name', 'name'),
+        Index('idx_system_prompts_created', 'created_at'),
+        Index('idx_system_prompts_default', 'is_default'),
+    )
+
+
+class SystemPromptUsage(Base):
+    """마지막 사용 System Prompt 추적 테이블"""
+    __tablename__ = "system_prompt_usage"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(255), index=True, nullable=True)  # 사용자 ID (향후 확장용)
+    session_id = Column(String(255), index=True, nullable=True)  # 세션 ID
+    system_prompt_id = Column(Integer, nullable=False, index=True)  # 사용한 System Prompt ID
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # 인덱스
+    __table_args__ = (
+        Index('idx_user_session', 'user_id', 'session_id'),
+        Index('idx_prompt_usage_created', 'created_at'),
+    )
+
+
 # ============= 데이터베이스 관리 클래스 =============
 
 class DatabaseManager:
@@ -303,7 +341,7 @@ class DatabaseManager:
         
         from sqlalchemy import inspect
         inspector = inspect(self.engine)
-        required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints'}
+        required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints', 'system_prompts', 'system_prompt_usage'}
         
         # 현재 스키마 확인
         try:
@@ -483,7 +521,7 @@ class DatabaseManager:
                     from sqlalchemy import inspect
                     inspector = inspect(self.engine)
                     existing_tables = set(inspector.get_table_names())
-                    required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints'}
+                    required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints', 'system_prompts', 'system_prompt_usage'}
                     
                     if required_tables.issubset(existing_tables):
                         print(f"✓ All required tables verified: {', '.join(sorted(required_tables))}")
@@ -523,7 +561,7 @@ class DatabaseManager:
     def _grant_permissions(self):
         """다른 사용자 계정에 테이블 권한 부여"""
         try:
-            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints'}
+            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints', 'system_prompts', 'system_prompt_usage'}
             
             # 권한을 부여할 추가 사용자 목록 (환경 변수에서 읽거나 기본값 사용)
             additional_users = []
@@ -680,6 +718,39 @@ class DatabaseManager:
                 text("CREATE INDEX IF NOT EXISTS idx_session_id ON keyword_voiceprints(session_id)"),
                 text("CREATE INDEX IF NOT EXISTS idx_user_id ON keyword_voiceprints(user_id)"),
                 text("CREATE INDEX IF NOT EXISTS idx_base_stt_keyword ON keyword_voiceprints(base_keyword, stt_keyword)")
+            ],
+            'system_prompts': [
+                text("""
+                    CREATE TABLE IF NOT EXISTS system_prompts (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL,
+                        content TEXT NOT NULL,
+                        description TEXT,
+                        is_default BOOLEAN NOT NULL DEFAULT FALSE,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                """),
+                text("CREATE INDEX IF NOT EXISTS idx_system_prompts_name ON system_prompts(name)"),
+                text("CREATE INDEX IF NOT EXISTS idx_system_prompts_created ON system_prompts(created_at)"),
+                text("CREATE INDEX IF NOT EXISTS idx_system_prompts_default ON system_prompts(is_default)")
+            ],
+            'system_prompt_usage': [
+                text("""
+                    CREATE TABLE IF NOT EXISTS system_prompt_usage (
+                        id SERIAL PRIMARY KEY,
+                        user_id VARCHAR(255),
+                        session_id VARCHAR(255),
+                        system_prompt_id INTEGER NOT NULL,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                """),
+                text("CREATE INDEX IF NOT EXISTS idx_user_id ON system_prompt_usage(user_id)"),
+                text("CREATE INDEX IF NOT EXISTS idx_session_id ON system_prompt_usage(session_id)"),
+                text("CREATE INDEX IF NOT EXISTS idx_system_prompt_id ON system_prompt_usage(system_prompt_id)"),
+                text("CREATE INDEX IF NOT EXISTS idx_user_session ON system_prompt_usage(user_id, session_id)"),
+                text("CREATE INDEX IF NOT EXISTS idx_prompt_usage_created ON system_prompt_usage(created_at)")
             ]
         }
         
@@ -795,7 +866,7 @@ class DatabaseManager:
             from sqlalchemy import inspect
             inspector = inspect(self.engine)
             existing_tables = set(inspector.get_table_names())
-            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints'}
+            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints', 'system_prompts', 'system_prompt_usage'}
             
             if not required_tables.issubset(existing_tables):
                 missing = required_tables - existing_tables
@@ -818,7 +889,7 @@ class DatabaseManager:
             }
         
         try:
-            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints'}
+            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints', 'system_prompts', 'system_prompt_usage'}
             
             # 현재 스키마 및 데이터베이스 정보 확인
             current_schema = None

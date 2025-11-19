@@ -5,7 +5,7 @@
  * 업데이트된 기능들을 테스트합니다.
  */
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8001';
 
 // 테스트 결과 저장
 const testResults = {

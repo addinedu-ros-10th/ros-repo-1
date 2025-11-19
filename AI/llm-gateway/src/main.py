@@ -33,7 +33,9 @@ from .database import (
     load_conversation_from_db,
     log_api_request,
     log_cost,
-    KeywordVoiceprint
+    KeywordVoiceprint,
+    SystemPrompt,
+    SystemPromptUsage
 )
 import time
 
@@ -101,11 +103,11 @@ TESTS_DIR = os.path.join(BASE_DIR, "tests", "user_testing")
 DOCKER_TESTS_DIR = "/app/tests/user_testing"
 
 if os.path.exists(TESTS_DIR):
-    app.mount("/tests", StaticFiles(directory=TESTS_DIR, html=True), name="tests")
-    logger.info(f"Static files mounted at /tests from {TESTS_DIR}")
+    app.mount("/tests/user_testing", StaticFiles(directory=TESTS_DIR, html=True), name="tests")
+    logger.info(f"Static files mounted at /tests/user_testing from {TESTS_DIR}")
 elif os.path.exists(DOCKER_TESTS_DIR):
-    app.mount("/tests", StaticFiles(directory=DOCKER_TESTS_DIR, html=True), name="tests")
-    logger.info(f"Static files mounted at /tests from {DOCKER_TESTS_DIR}")
+    app.mount("/tests/user_testing", StaticFiles(directory=DOCKER_TESTS_DIR, html=True), name="tests")
+    logger.info(f"Static files mounted at /tests/user_testing from {DOCKER_TESTS_DIR}")
 else:
     logger.warning(f"Tests directory not found at {TESTS_DIR} or {DOCKER_TESTS_DIR}")
 
@@ -234,6 +236,36 @@ class TTSRequest(BaseModel):
                 "model": "tts-1"
             }
         }
+
+
+class SystemPromptCreate(BaseModel):
+    """System Prompt 생성 모델"""
+    name: str = Field(..., description="프롬프트 이름")
+    content: str = Field(..., description="프롬프트 내용")
+    description: Optional[str] = Field(default=None, description="프롬프트 설명 (선택사항)")
+    is_default: bool = Field(default=False, description="기본 프롬프트 여부")
+
+
+class SystemPromptUpdate(BaseModel):
+    """System Prompt 수정 모델"""
+    name: Optional[str] = Field(default=None, description="프롬프트 이름")
+    content: Optional[str] = Field(default=None, description="프롬프트 내용")
+    description: Optional[str] = Field(default=None, description="프롬프트 설명")
+    is_default: Optional[bool] = Field(default=None, description="기본 프롬프트 여부")
+
+
+class SystemPromptResponse(BaseModel):
+    """System Prompt 응답 모델"""
+    id: int
+    name: str
+    content: str
+    description: Optional[str]
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 # ============= STT 엔드포인트 =============
@@ -1154,6 +1186,308 @@ async def get_session(session_id: str):
             "messages": messages
         }
     return {"success": False, "message": "세션을 찾을 수 없음"}
+
+
+# ============= System Prompt 엔드포인트 =============
+
+
+@app.get("/api/system-prompts", summary="System Prompt 목록 조회")
+async def list_system_prompts():
+    """등록된 모든 System Prompt 목록을 조회합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            prompts = session.query(SystemPrompt).order_by(SystemPrompt.created_at.desc()).all()
+            return {
+                "success": True,
+                "prompts": [SystemPromptResponse.model_validate(p) for p in prompts]
+            }
+    except Exception as e:
+        logger.error(f"Failed to list system prompts: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"System Prompt 목록 조회 실패: {str(e)}")
+
+
+@app.get("/api/system-prompts/{prompt_id}", summary="특정 System Prompt 조회")
+async def get_system_prompt(prompt_id: int):
+    """특정 System Prompt를 조회합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            prompt = session.query(SystemPrompt).filter_by(id=prompt_id).first()
+            if not prompt:
+                raise HTTPException(status_code=404, detail=f"System Prompt {prompt_id}를 찾을 수 없습니다")
+            return {
+                "success": True,
+                "prompt": SystemPromptResponse.model_validate(prompt)
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get system prompt: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"System Prompt 조회 실패: {str(e)}")
+
+
+@app.post("/api/system-prompts", summary="System Prompt 생성")
+async def create_system_prompt(request: SystemPromptCreate):
+    """새로운 System Prompt를 생성합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            prompt = SystemPrompt(
+                name=request.name,
+                content=request.content,
+                description=request.description,
+                is_default=request.is_default
+            )
+            session.add(prompt)
+            session.flush()  # ID를 얻기 위해 flush
+            
+            return {
+                "success": True,
+                "prompt": SystemPromptResponse.model_validate(prompt)
+            }
+    except Exception as e:
+        logger.error(f"Failed to create system prompt: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"System Prompt 생성 실패: {str(e)}")
+
+
+@app.put("/api/system-prompts/{prompt_id}", summary="System Prompt 수정")
+async def update_system_prompt(prompt_id: int, request: SystemPromptUpdate):
+    """기존 System Prompt를 수정합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            prompt = session.query(SystemPrompt).filter_by(id=prompt_id).first()
+            if not prompt:
+                raise HTTPException(status_code=404, detail=f"System Prompt {prompt_id}를 찾을 수 없습니다")
+            
+            # 업데이트할 필드만 수정
+            if request.name is not None:
+                prompt.name = request.name
+            if request.content is not None:
+                prompt.content = request.content
+            if request.description is not None:
+                prompt.description = request.description
+            if request.is_default is not None:
+                prompt.is_default = request.is_default
+            
+            prompt.updated_at = datetime.utcnow()
+            
+            return {
+                "success": True,
+                "prompt": SystemPromptResponse.model_validate(prompt)
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update system prompt: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"System Prompt 수정 실패: {str(e)}")
+
+
+@app.delete("/api/system-prompts/{prompt_id}", summary="System Prompt 삭제")
+async def delete_system_prompt(prompt_id: int):
+    """System Prompt를 삭제합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            prompt = session.query(SystemPrompt).filter_by(id=prompt_id).first()
+            if not prompt:
+                raise HTTPException(status_code=404, detail=f"System Prompt {prompt_id}를 찾을 수 없습니다")
+            
+            session.delete(prompt)
+            
+            return {
+                "success": True,
+                "message": f"System Prompt {prompt_id} 삭제됨"
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete system prompt: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"System Prompt 삭제 실패: {str(e)}")
+
+
+@app.get("/api/system-prompts/last-used/{session_id}", summary="마지막 사용 System Prompt 조회")
+async def get_last_used_prompt(session_id: str):
+    """특정 세션에서 마지막으로 사용한 System Prompt를 조회합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            usage = session.query(SystemPromptUsage)\
+                .filter_by(session_id=session_id)\
+                .order_by(SystemPromptUsage.updated_at.desc())\
+                .first()
+            
+            if not usage:
+                # 기본 프롬프트 조회
+                default_prompts = session.query(SystemPrompt)\
+                    .filter_by(is_default=True)\
+                    .order_by(SystemPrompt.created_at.desc())\
+                    .all()
+                
+                if default_prompts:
+                    return {
+                        "success": True,
+                        "prompt": SystemPromptResponse.from_orm(default_prompts[0]),
+                        "is_default": True
+                    }
+                
+                return {
+                    "success": False,
+                    "message": "마지막 사용 프롬프트를 찾을 수 없습니다"
+                }
+            
+            prompt = session.query(SystemPrompt).filter_by(id=usage.system_prompt_id).first()
+            if not prompt:
+                return {
+                    "success": False,
+                    "message": "프롬프트를 찾을 수 없습니다"
+                }
+            
+            return {
+                "success": True,
+                "prompt": SystemPromptResponse.model_validate(prompt),
+                "is_default": False
+            }
+    except Exception as e:
+        logger.error(f"Failed to get last used prompt: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"마지막 사용 프롬프트 조회 실패: {str(e)}")
+
+
+@app.post("/api/system-prompts/usage", summary="System Prompt 사용 기록 저장")
+async def save_prompt_usage(
+    session_id: str = Query(..., description="세션 ID"),
+    system_prompt_id: int = Query(..., description="사용한 System Prompt ID"),
+    user_id: Optional[str] = Query(default=None, description="사용자 ID (선택사항)")
+):
+    """System Prompt 사용 기록을 저장합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            # 기존 사용 기록 확인
+            existing = session.query(SystemPromptUsage)\
+                .filter_by(session_id=session_id, system_prompt_id=system_prompt_id)\
+                .first()
+            
+            if existing:
+                # 기존 기록 업데이트
+                existing.updated_at = datetime.utcnow()
+            else:
+                # 새 기록 생성
+                usage = SystemPromptUsage(
+                    session_id=session_id,
+                    system_prompt_id=system_prompt_id,
+                    user_id=user_id
+                )
+                session.add(usage)
+            
+            return {
+                "success": True,
+                "message": "사용 기록 저장됨"
+            }
+    except Exception as e:
+        logger.error(f"Failed to save prompt usage: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"사용 기록 저장 실패: {str(e)}")
+
+
+@app.put("/api/chat/update-system-prompt", summary="기존 세션의 System Prompt 업데이트")
+async def update_session_system_prompt(
+    session_id: str = Query(..., description="세션 ID"),
+    system_prompt: Optional[str] = Query(None, description="새 System Prompt 내용"),
+    system_prompt_id: Optional[int] = Query(None, description="새 System Prompt ID")
+):
+    """기존 세션의 System Prompt를 업데이트합니다."""
+    try:
+        # System Prompt 내용 가져오기
+        prompt_content = None
+        if system_prompt_id:
+            if not db_manager._initialized:
+                raise HTTPException(status_code=503, detail="Database not initialized")
+            
+            with db_manager.get_session() as session:
+                prompt = session.query(SystemPrompt).filter_by(id=system_prompt_id).first()
+                if not prompt:
+                    raise HTTPException(status_code=404, detail=f"System Prompt {system_prompt_id}를 찾을 수 없습니다")
+                prompt_content = prompt.content
+                
+                # 사용 기록 저장
+                usage = SystemPromptUsage(
+                    session_id=session_id,
+                    system_prompt_id=system_prompt_id
+                )
+                session.add(usage)
+        elif system_prompt:
+            prompt_content = system_prompt
+        else:
+            raise HTTPException(status_code=400, detail="system_prompt 또는 system_prompt_id가 필요합니다")
+        
+        if not prompt_content:
+            raise HTTPException(status_code=400, detail="System Prompt 내용을 찾을 수 없습니다")
+        
+        # Redis 세션 업데이트
+        try:
+            messages = await redis_session_manager.get_session(session_id)
+            if messages:
+                # system 메시지 찾아서 업데이트
+                for i, msg in enumerate(messages):
+                    if msg.get("role") == "system":
+                        messages[i] = {"role": "system", "content": prompt_content}
+                        break
+                else:
+                    # system 메시지가 없으면 맨 앞에 추가
+                    messages.insert(0, {"role": "system", "content": prompt_content})
+                
+                await redis_session_manager.save_session(session_id, messages)
+        except Exception as e:
+            logger.warning(f"Failed to update Redis session: {e}")
+        
+        # Fallback store 업데이트
+        if session_id in fallback_store:
+            messages = fallback_store[session_id]
+            for i, msg in enumerate(messages):
+                if msg.get("role") == "system":
+                    messages[i] = {"role": "system", "content": prompt_content}
+                    break
+            else:
+                messages.insert(0, {"role": "system", "content": prompt_content})
+            fallback_store[session_id] = messages
+        
+        # DB 세션 업데이트
+        if db_manager._initialized:
+            try:
+                with db_manager.get_session() as session:
+                    from .database import ConversationSession
+                    db_session = session.query(ConversationSession).filter_by(session_id=session_id).first()
+                    if db_session:
+                        db_session.system_prompt = prompt_content
+                        db_session.updated_at = datetime.utcnow()
+            except Exception as e:
+                logger.warning(f"Failed to update DB session: {e}")
+        
+        return {
+            "success": True,
+            "message": f"세션 {session_id}의 System Prompt가 업데이트되었습니다",
+            "system_prompt": prompt_content
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update session system prompt: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"System Prompt 업데이트 실패: {str(e)}")
 
 
 @app.get("/", summary="Health Check")

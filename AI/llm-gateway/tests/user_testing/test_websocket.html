@@ -214,15 +214,15 @@
         let currentAssistantDiv = null;
         let currentSessionId = null;
         const SESSION_STORAGE_KEY = 'websocket_session_id';
-        const API_BASE_URL = 'http://localhost:8000';
+        const API_BASE_URL = 'http://localhost:8001';
 
         // 서버 URL 설정 (환경에 맞게 수정)
         function getWebSocketUrl() {
             const sessionId = localStorage.getItem(SESSION_STORAGE_KEY);
             if (sessionId) {
-                return `ws://localhost:8000/ws/voice?session_id=${encodeURIComponent(sessionId)}`;
+                return `ws://localhost:8001/ws/voice?session_id=${encodeURIComponent(sessionId)}`;
             }
-            return 'ws://localhost:8000/ws/voice';
+            return 'ws://localhost:8001/ws/voice';
         }
 
         // 리소스 상태 업데이트

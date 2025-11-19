@@ -7,7 +7,7 @@ import json
 import base64
 import sys
 
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = "http://localhost:8001"
 
 def test_keyword_check():
     """키워드 확인 API 테스트"""

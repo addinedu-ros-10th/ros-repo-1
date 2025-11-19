@@ -16,7 +16,7 @@ import sys
 
 
 class WebSocketChatClient:
-    def __init__(self, uri: str = "ws://localhost:8000/ws/voice"):
+    def __init__(self, uri: str = "ws://localhost:8001/ws/voice"):
         self.uri = uri
         self.websocket = None
         self.current_response = ""
@@ -183,8 +183,8 @@ async def main():
     parser = argparse.ArgumentParser(description="WebSocket 실시간 채팅 테스트 클라이언트")
     parser.add_argument(
         "--uri",
-        default="ws://localhost:8000/ws/voice",
-        help="WebSocket 서버 URI (기본값: ws://localhost:8000/ws/voice)"
+        default="ws://localhost:8001/ws/voice",
+        help="WebSocket 서버 URI (기본값: ws://localhost:8001/ws/voice)"
     )
     parser.add_argument(
         "--interactive",
