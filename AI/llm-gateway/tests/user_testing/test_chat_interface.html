@@ -990,15 +990,59 @@
             }
         }
 
+        // getUserMedia 헬퍼 함수 (브라우저 호환성 처리)
+        function getUserMedia(constraints) {
+            // 최신 API 사용
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                return navigator.mediaDevices.getUserMedia(constraints);
+            }
+            
+            // 구형 브라우저 지원
+            const getUserMedia = navigator.getUserMedia || 
+                                 navigator.webkitGetUserMedia || 
+                                 navigator.mozGetUserMedia || 
+                                 navigator.msGetUserMedia;
+            
+            if (getUserMedia) {
+                return new Promise((resolve, reject) => {
+                    getUserMedia.call(navigator, constraints, resolve, reject);
+                });
+            }
+            
+            // 지원하지 않는 경우
+            return Promise.reject(new Error('getUserMedia를 지원하지 않는 브라우저입니다.'));
+        }
+
         // 녹음 시작
         async function startRecording() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // 브라우저 지원 확인
+                if (!navigator.mediaDevices && !navigator.getUserMedia && !navigator.webkitGetUserMedia) {
+                    alert('이 브라우저는 마이크 접근을 지원하지 않습니다.\n최신 브라우저(Chrome, Firefox, Edge)를 사용해주세요.');
+                    return;
+                }
+                
+                // HTTPS 확인 (로컬호스트는 예외)
+                const isSecure = window.location.protocol === 'https:' || 
+                                 window.location.hostname === 'localhost' || 
+                                 window.location.hostname === '127.0.0.1';
+                
+                if (!isSecure) {
+                    alert('마이크 접근을 위해서는 HTTPS가 필요합니다.\n\n현재: ' + window.location.protocol + '//' + window.location.host + '\n\nHTTPS로 접속하거나 localhost를 사용해주세요.');
+                    return;
+                }
+                
+                console.log('🎤 마이크 접근 요청 중...');
+                const stream = await getUserMedia({ audio: true });
+                console.log('✅ 마이크 접근 성공');
+                
                 mediaRecorder = new MediaRecorder(stream);
                 audioChunks = [];
                 
                 mediaRecorder.ondataavailable = (event) => {
-                    audioChunks.push(event.data);
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
                 };
                 
                 mediaRecorder.onstop = async () => {
@@ -1015,8 +1059,45 @@
                 button.classList.add('recording');
                 document.getElementById('voiceStatus').textContent = '녹음 중...';
             } catch (error) {
-                console.error('Failed to start recording:', error);
-                alert('마이크 권한이 필요합니다.');
+                console.error('❌ 녹음 시작 실패:', error);
+                isRecording = false;
+                
+                let errorMessage = '마이크 접근에 실패했습니다.\n\n';
+                
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    errorMessage += '원인: 마이크 권한이 거부되었습니다.\n\n';
+                    errorMessage += '해결 방법:\n';
+                    errorMessage += '1. 브라우저 주소창 왼쪽의 자물쇠 아이콘을 클릭\n';
+                    errorMessage += '2. "사이트 설정" 또는 "권한" 메뉴 선택\n';
+                    errorMessage += '3. 마이크 권한을 "허용"으로 변경\n';
+                    errorMessage += '4. 페이지를 새로고침하세요';
+                } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                    errorMessage += '원인: 마이크를 찾을 수 없습니다.\n\n';
+                    errorMessage += '해결 방법:\n';
+                    errorMessage += '1. 마이크가 연결되어 있는지 확인\n';
+                    errorMessage += '2. 다른 프로그램에서 마이크를 사용 중이 아닌지 확인';
+                } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                    errorMessage += '원인: 마이크에 접근할 수 없습니다.\n\n';
+                    errorMessage += '해결 방법:\n';
+                    errorMessage += '1. 다른 프로그램에서 마이크를 사용 중이 아닌지 확인\n';
+                    errorMessage += '2. 브라우저를 재시작하세요';
+                } else {
+                    errorMessage += `원인: ${error.message || error.name}\n\n`;
+                    errorMessage += '해결 방법:\n';
+                    errorMessage += '1. 브라우저를 최신 버전으로 업데이트\n';
+                    errorMessage += '2. HTTPS로 접속했는지 확인\n';
+                    errorMessage += '3. 브라우저를 재시작하세요';
+                }
+                
+                alert(errorMessage);
+                
+                // 버튼 상태 복원
+                const button = document.getElementById('voiceRecordButton');
+                if (button) {
+                    button.textContent = '🎤 음성 입력';
+                    button.classList.remove('recording');
+                }
+                document.getElementById('voiceStatus').textContent = '대기 중...';
             }
         }
 
