@@ -991,14 +991,28 @@ def save_conversation_to_db(session_id: str, messages: List[Dict[str, str]], sys
                 logger.debug(f"Deleted {deleted_count} existing messages for session: {session_id}")
             
             # 메시지 저장
+            saved_count = 0
             for msg in messages:
+                # content가 None인 경우 처리
+                content = msg.get("content")
+                if content is None:
+                    # tool_calls가 있으면 그것을 문자열로 변환
+                    if "tool_calls" in msg and msg["tool_calls"]:
+                        content = json.dumps(msg["tool_calls"], ensure_ascii=False)
+                    else:
+                        # content가 None이고 tool_calls도 없으면 빈 문자열로 저장
+                        content = ""
+                    logger.debug(f"Message with None content converted: role={msg.get('role')}, has_tool_calls={bool(msg.get('tool_calls'))}")
+                
+                # content는 항상 문자열로 보장 (None이면 빈 문자열)
                 db_message = ConversationMessage(
                     session_id=session_id,
                     role=msg["role"],
-                    content=msg["content"]
+                    content=content or ""  # None이면 빈 문자열로 저장
                 )
                 session.add(db_message)
-            logger.debug(f"Saved {len(messages)} messages for session: {session_id}")
+                saved_count += 1
+            logger.debug(f"Saved {saved_count} messages for session: {session_id}")
     except Exception as e:
         logger.error(f"Failed to save conversation to DB: {e}", exc_info=True)
 

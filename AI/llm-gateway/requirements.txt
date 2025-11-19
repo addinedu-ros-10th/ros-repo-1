@@ -22,6 +22,9 @@ aioredis>=2.0.1
 # WebSocket 테스트 (선택사항)
 websockets>=12.0  # Python 클라이언트 테스트용
 
+# HTTP 클라이언트 (외부 API 호출용)
+httpx>=0.25.0  # 비동기 HTTP 클라이언트
+
 # 기본 유틸리티 (ROS2 환경 호환성)
 setuptools>=65.0.0  # 기본 패키지 관리 도구
 jinja2>=3.1.0  # 템플릿 엔진 (일부 ROS2 패키지 필요)

@@ -656,6 +656,24 @@
         // System Prompt 업데이트
         async function updateSystemPrompt(promptId) {
             try {
+                // 프롬프트 내용 가져오기 (로깅용)
+                let basePrompt = null;
+                if (promptId) {
+                    const promptResponse = await fetch(`${API_BASE}/api/system-prompts/${promptId}`);
+                    const promptData = await promptResponse.json();
+                    if (promptData.success) {
+                        basePrompt = promptData.prompt.content;
+                    }
+                }
+                
+                // 프롬프트 엔지니어링 로그 출력
+                console.group('🔧 System Prompt 업데이트');
+                console.log('📝 원본 System Prompt:', basePrompt || '(기본 프롬프트)');
+                console.log('🛠️ Function Calling 안내 포함: 서버에서 자동 추가됨');
+                console.log('🆔 Session ID:', currentSessionId);
+                console.groupEnd();
+                
+                // 서버에 업데이트 요청 (서버에서 Function Calling 안내를 자동으로 추가함)
                 const response = await fetch(`${API_BASE}/api/chat/update-system-prompt?session_id=${currentSessionId}&system_prompt_id=${promptId}`);
                 const data = await response.json();
                 
@@ -668,6 +686,29 @@
             } catch (error) {
                 console.error('Failed to update system prompt:', error);
             }
+        }
+
+        // System Prompt를 Function Calling 안내로 감싸기
+        function wrapSystemPromptWithToolInstructions(basePrompt) {
+            if (!basePrompt) {
+                return null;
+            }
+            
+            const toolInstructions = `
+
+중요: 사용자가 데이터 조회나 API 호출을 요청하면 반드시 제공된 함수를 사용해야 합니다. 일반적인 응답으로 대체하지 마세요.
+
+사용 가능한 함수:
+1. get_users_list: 사용자가 "사용자 목록", "사용자 리스트", "사용자 목록 보여줘", "사용자 조회" 등을 요청할 때 사용
+2. get_user_profile: 사용자가 "사용자 프로필", "사용자 정보", "사용자 상세" 등을 요청할 때 사용 (user_id 필요)
+3. get_user_relationships: 사용자가 "사용자 관계", "관계 정보" 등을 요청할 때 사용 (user_id 필요)
+
+규칙:
+- 사용자가 데이터 조회를 요청하면 반드시 해당 함수를 호출하세요
+- 함수를 사용할 수 있는 경우 일반적인 응답으로 대체하지 마세요
+- 함수 호출 결과를 받은 후 사용자에게 명확하게 전달하세요`;
+            
+            return basePrompt + toolInstructions;
         }
 
         // 메시지 전송
@@ -705,8 +746,22 @@
                     }
                 }
                 
-                // 채팅 API 호출
-                const response = await fetch(`${API_BASE}/api/chat/stream`, {
+                // Function Calling 안내로 감싸기
+                const wrappedSystemPrompt = wrapSystemPromptWithToolInstructions(systemPrompt);
+                
+                // 프롬프트 엔지니어링 로그 출력
+                console.group('🔧 프롬프트 엔지니어링 정보');
+                console.log('📝 원본 System Prompt:', systemPrompt || '(기본 프롬프트 사용)');
+                console.log('🛠️ Function Calling 안내 포함:', wrappedSystemPrompt ? '예' : '아니오');
+                if (wrappedSystemPrompt) {
+                    console.log('📋 최종 System Prompt (일부):', wrappedSystemPrompt.substring(0, 200) + '...');
+                }
+                console.log('💬 사용자 메시지:', message);
+                console.log('🆔 Session ID:', currentSessionId);
+                console.groupEnd();
+                
+                // 채팅 API 호출 (Function Calling 지원 - /api/chat 사용)
+                const response = await fetch(`${API_BASE}/api/chat`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -714,7 +769,7 @@
                     body: JSON.stringify({
                         message: message,
                         session_id: currentSessionId,
-                        system_prompt: systemPrompt
+                        system_prompt: wrappedSystemPrompt
                     })
                 });
                 
@@ -722,33 +777,28 @@
                     throw new Error('Failed to send message');
                 }
                 
-                // 스트리밍 응답 처리
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let assistantMessageId = addMessage('assistant', '');
+                const data = await response.json();
                 
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
-                    
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(line.slice(6));
-                                if (data.content) {
-                                    appendToMessage(assistantMessageId, data.content);
-                                }
-                            } catch (e) {
-                                // JSON 파싱 실패 무시
-                            }
-                        }
-                    }
+                // 응답 로그
+                console.log('✅ API 응답:', {
+                    success: data.success,
+                    response_length: data.response?.length || 0,
+                    session_id: data.session_id,
+                    model: data.model,
+                    iterations: data.iterations
+                });
+                
+                // 서버는 'response' 필드를 반환하므로 'response' 또는 'message' 모두 확인
+                const responseText = data.response || data.message;
+                
+                if (data.success && responseText) {
+                    addMessage('assistant', responseText);
+                } else {
+                    console.error('❌ 응답 실패:', data);
+                    addMessage('assistant', '죄송합니다. 응답을 생성하는데 실패했습니다.');
                 }
             } catch (error) {
-                console.error('Failed to send message:', error);
+                console.error('❌ 메시지 전송 실패:', error);
                 addMessage('assistant', '죄송합니다. 오류가 발생했습니다.');
             } finally {
                 input.disabled = false;
@@ -896,6 +946,13 @@
                         systemPrompt = promptData.prompt.content;
                     }
                 }
+                
+                // 프롬프트 엔지니어링 로그 출력
+                console.group('🔧 음성 메시지 - 프롬프트 엔지니어링 정보');
+                console.log('📝 원본 System Prompt:', systemPrompt || '(기본 프롬프트 사용)');
+                console.log('🛠️ Function Calling 안내: 서버에서 자동 추가됨');
+                console.log('🆔 Session ID:', currentSessionId);
+                console.groupEnd();
                 
                 const response = await fetch(`${API_BASE}/api/voice/process?session_id=${currentSessionId}`, {
                     method: 'POST',

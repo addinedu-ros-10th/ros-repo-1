@@ -37,6 +37,7 @@ from .database import (
     SystemPrompt,
     SystemPromptUsage
 )
+from .tools import TOOLS, execute_function
 import time
 
 # 로깅 설정
@@ -324,6 +325,9 @@ async def speech_to_text(
 
 @app.post("/api/chat", summary="텍스트 채팅")
 async def text_chat(request: TextChatRequest):
+
+    print(len(TOOLS))
+    logger.info(f"TOOLS: {TOOLS}")
     """
     텍스트 메시지를 ChatGPT에 전송하고 응답을 받습니다.
     세션별 대화 히스토리 관리 (Redis 사용)
@@ -342,7 +346,21 @@ async def text_chat(request: TextChatRequest):
     start_time = time.time()
     try:
         # 기본값 설정
-        system_prompt = request.system_prompt or settings.default_system_prompt
+        base_system_prompt = request.system_prompt or settings.default_system_prompt
+        # System Prompt에 Function Calling 사용 안내 추가
+        system_prompt = f"""{base_system_prompt}
+
+중요: 사용자가 데이터 조회나 API 호출을 요청하면 반드시 제공된 함수를 사용해야 합니다. 일반적인 응답으로 대체하지 마세요.
+
+사용 가능한 함수:
+1. get_users_list: 사용자가 "사용자 목록", "사용자 리스트", "사용자 목록 보여줘", "사용자 조회" 등을 요청할 때 사용
+2. get_user_profile: 사용자가 "사용자 프로필", "사용자 정보", "사용자 상세" 등을 요청할 때 사용 (user_id 필요)
+3. get_user_relationships: 사용자가 "사용자 관계", "관계 정보" 등을 요청할 때 사용 (user_id 필요)
+
+규칙:
+- 사용자가 데이터 조회를 요청하면 반드시 해당 함수를 호출하세요
+- 함수를 사용할 수 있는 경우 일반적인 응답으로 대체하지 마세요
+- 함수 호출 결과를 받은 후 사용자에게 명확하게 전달하세요"""
         model = request.model.value if request.model else settings.default_chat_model
         
         # 세션 히스토리 가져오기 또는 생성
@@ -351,24 +369,146 @@ async def text_chat(request: TextChatRequest):
             messages = await redis_session_manager.get_session(request.session_id)
             if not messages:
                 messages = await redis_session_manager.initialize_session(request.session_id, system_prompt)
+            else:
+                # 기존 세션이 있어도 System Prompt 업데이트
+                # system 메시지 찾아서 업데이트
+                for i, msg in enumerate(messages):
+                    if msg.get("role") == "system":
+                        messages[i] = {"role": "system", "content": system_prompt}
+                        break
+                else:
+                    # system 메시지가 없으면 맨 앞에 추가
+                    messages.insert(0, {"role": "system", "content": system_prompt})
+                # 업데이트된 세션 저장
+                await redis_session_manager.save_session(request.session_id, messages)
         except Exception:
             # Redis 실패 시 fallback 사용
             if request.session_id not in fallback_store:
                 fallback_store[request.session_id] = [
                     {"role": "system", "content": system_prompt}
                 ]
+            else:
+                # 기존 세션이 있어도 System Prompt 업데이트
+                messages = fallback_store[request.session_id]
+                for i, msg in enumerate(messages):
+                    if msg.get("role") == "system":
+                        messages[i] = {"role": "system", "content": system_prompt}
+                        break
+                else:
+                    messages.insert(0, {"role": "system", "content": system_prompt})
+                fallback_store[request.session_id] = messages
             messages = fallback_store[request.session_id]
 
         # 사용자 메시지 추가
         messages.append({"role": "user", "content": request.message})
 
-        # ChatGPT API 호출
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages
-        )
+        # ChatGPT API 호출 (Function Calling 지원)
+        max_iterations = 5  # 최대 함수 호출 반복 횟수
+        iteration = 0
+        final_response = None
 
-        assistant_message = response.choices[0].message.content
+        logger.info(f"model: {model}")
+        logger.info(f"messages: {messages}")
+        logger.info(f"max_iterations: {max_iterations}")
+        logger.info(f"iteration: {iteration}")
+        logger.info(f"final_response: {final_response}")
+        
+        
+        
+        
+        while iteration < max_iterations:
+            # tools와 tool_choice는 TOOLS가 비어있지 않을 때만 전달
+            api_params = {
+                "model": model,
+                "messages": messages
+            }
+            
+            # TOOLS가 비어있지 않을 때만 tools와 tool_choice 전달
+            if TOOLS and len(TOOLS) > 0:
+                api_params["tools"] = TOOLS
+                api_params["tool_choice"] = "auto"
+                logger.debug(f"Chat API call - iteration: {iteration}, tools provided: {len(TOOLS)}")
+            else:
+                logger.debug(f"Chat API call - iteration: {iteration}, no tools available")
+            
+            response = await client.chat.completions.create(**api_params)
+            
+            message = response.choices[0].message
+            
+            # 디버깅: 함수 호출 여부 확인
+            has_tool_calls = (
+                hasattr(message, 'tool_calls') 
+                and message.tool_calls 
+                and len(message.tool_calls) > 0
+                and TOOLS 
+                and len(TOOLS) > 0
+            )
+            logger.debug(f"Message tool_calls: {has_tool_calls}, content: {message.content[:50] if message.content else 'None'}")
+            
+            # 함수 호출이 없으면 종료
+            if not has_tool_calls:
+                final_response = message.content
+                logger.debug(f"No tool calls, final response: {final_response[:100] if final_response else 'None'}")
+                break
+            
+            # TOOLS가 없으면 tool_calls가 있어도 처리하지 않음
+            if not TOOLS or len(TOOLS) == 0:
+                logger.warning("Tool calls detected but TOOLS is empty, using content as final response")
+                final_response = message.content
+                break
+            
+            # 함수 호출 정보를 메시지에 추가
+            assistant_message = {
+                "role": "assistant",
+                "content": message.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments
+                        }
+                    }
+                    for tc in message.tool_calls
+                ]
+            }
+            messages.append(assistant_message)
+            
+            # 함수 실행
+            logger.info(f"Tool calls detected: {len(message.tool_calls)} calls")
+            for tool_call in message.tool_calls:
+                function_name = tool_call.function.name
+                logger.info(f"Executing function: {function_name}")
+                try:
+                    arguments = json.loads(tool_call.function.arguments)
+                    logger.debug(f"Function arguments: {arguments}")
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse function arguments: {e}")
+                    arguments = {}
+                
+                # 함수 실행
+                result = await execute_function(function_name, arguments, db_manager)
+                logger.info(f"Function {function_name} result: success={result.get('success', False)}")
+                
+                # 결과를 메시지에 추가
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(result, ensure_ascii=False)
+                })
+            
+            iteration += 1
+        
+        # 최종 응답이 없으면 마지막으로 한 번 더 호출
+        if final_response is None:
+            final_response_message = await client.chat.completions.create(
+                model=model,
+                messages=messages
+            )
+            final_response = final_response_message.choices[0].message.content
+
+        assistant_message = final_response
 
         # 어시스턴트 응답 저장
         messages.append({"role": "assistant", "content": assistant_message})
@@ -416,7 +556,8 @@ async def text_chat(request: TextChatRequest):
             "success": True,
             "response": assistant_message,
             "session_id": request.session_id,
-            "model": model
+            "model": model,
+            "iterations": iteration  # 함수 호출 반복 횟수
         }
 
     except Exception as e:
@@ -472,6 +613,9 @@ async def streaming_chat(request: TextChatRequest):
             messages.append({"role": "user", "content": request.message})
 
             # 스트리밍 ChatGPT API 호출
+            # 주의: 스트리밍에서 Function Calling은 복잡하므로,
+            # 함수 호출이 필요한 경우 일반 /api/chat을 사용하는 것을 권장합니다.
+            # 여기서는 기본 스트리밍만 지원합니다.
             stream = await client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -1413,7 +1557,7 @@ async def update_session_system_prompt(
     """기존 세션의 System Prompt를 업데이트합니다."""
     try:
         # System Prompt 내용 가져오기
-        prompt_content = None
+        base_prompt_content = None
         if system_prompt_id:
             if not db_manager._initialized:
                 raise HTTPException(status_code=503, detail="Database not initialized")
@@ -1422,7 +1566,7 @@ async def update_session_system_prompt(
                 prompt = session.query(SystemPrompt).filter_by(id=system_prompt_id).first()
                 if not prompt:
                     raise HTTPException(status_code=404, detail=f"System Prompt {system_prompt_id}를 찾을 수 없습니다")
-                prompt_content = prompt.content
+                base_prompt_content = prompt.content
                 
                 # 사용 기록 저장
                 usage = SystemPromptUsage(
@@ -1431,12 +1575,29 @@ async def update_session_system_prompt(
                 )
                 session.add(usage)
         elif system_prompt:
-            prompt_content = system_prompt
+            base_prompt_content = system_prompt
         else:
             raise HTTPException(status_code=400, detail="system_prompt 또는 system_prompt_id가 필요합니다")
         
-        if not prompt_content:
+        if not base_prompt_content:
             raise HTTPException(status_code=400, detail="System Prompt 내용을 찾을 수 없습니다")
+        
+        # Function Calling 안내로 감싸기
+        prompt_content = f"""{base_prompt_content}
+
+중요: 사용자가 데이터 조회나 API 호출을 요청하면 반드시 제공된 함수를 사용해야 합니다. 일반적인 응답으로 대체하지 마세요.
+
+사용 가능한 함수:
+1. get_users_list: 사용자가 "사용자 목록", "사용자 리스트", "사용자 목록 보여줘", "사용자 조회" 등을 요청할 때 사용
+2. get_user_profile: 사용자가 "사용자 프로필", "사용자 정보", "사용자 상세" 등을 요청할 때 사용 (user_id 필요)
+3. get_user_relationships: 사용자가 "사용자 관계", "관계 정보" 등을 요청할 때 사용 (user_id 필요)
+
+규칙:
+- 사용자가 데이터 조회를 요청하면 반드시 해당 함수를 호출하세요
+- 함수를 사용할 수 있는 경우 일반적인 응답으로 대체하지 마세요
+- 함수 호출 결과를 받은 후 사용자에게 명확하게 전달하세요"""
+        
+        logger.info(f"System Prompt updated for session {session_id} (base length: {len(base_prompt_content)}, wrapped length: {len(prompt_content)})")
         
         # Redis 세션 업데이트
         try:
