@@ -443,7 +443,7 @@ class DatabaseManager:
             'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 
             'keyword_voiceprints', 'system_prompts', 'system_prompt_usage',
             'customized_mobile_conversation_sessions', 'customized_mobile_conversation_messages',
-            'psychological_counseling_analysis', 'counseling_reports', 'iot_device_status'
+            'psychological_counseling_analysis', 'counseling_reports', 'deep_learning_function_status'
         }
         
         # 현재 스키마 확인
@@ -628,7 +628,7 @@ class DatabaseManager:
             'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 
             'keyword_voiceprints', 'system_prompts', 'system_prompt_usage',
             'customized_mobile_conversation_sessions', 'customized_mobile_conversation_messages',
-            'psychological_counseling_analysis', 'counseling_reports', 'iot_device_status'
+            'psychological_counseling_analysis', 'counseling_reports', 'deep_learning_function_status'
         }
                     
                     if required_tables.issubset(existing_tables):
@@ -673,7 +673,7 @@ class DatabaseManager:
             'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 
             'keyword_voiceprints', 'system_prompts', 'system_prompt_usage',
             'customized_mobile_conversation_sessions', 'customized_mobile_conversation_messages',
-            'psychological_counseling_analysis', 'counseling_reports', 'iot_device_status'
+            'psychological_counseling_analysis', 'counseling_reports', 'deep_learning_function_status'
         }
             
             # 권한을 부여할 추가 사용자 목록 (환경 변수에서 읽거나 기본값 사용)
@@ -998,7 +998,7 @@ class DatabaseManager:
             'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 
             'keyword_voiceprints', 'system_prompts', 'system_prompt_usage',
             'customized_mobile_conversation_sessions', 'customized_mobile_conversation_messages',
-            'psychological_counseling_analysis', 'counseling_reports', 'iot_device_status'
+            'psychological_counseling_analysis', 'counseling_reports', 'deep_learning_function_status'
         }
             
             if not required_tables.issubset(existing_tables):
@@ -1026,7 +1026,7 @@ class DatabaseManager:
             'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 
             'keyword_voiceprints', 'system_prompts', 'system_prompt_usage',
             'customized_mobile_conversation_sessions', 'customized_mobile_conversation_messages',
-            'psychological_counseling_analysis', 'counseling_reports', 'iot_device_status'
+            'psychological_counseling_analysis', 'counseling_reports', 'deep_learning_function_status'
         }
             
             # 현재 스키마 및 데이터베이스 정보 확인
