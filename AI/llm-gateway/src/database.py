@@ -873,7 +873,7 @@ class DatabaseManager:
                         session_id VARCHAR(255),
                         status VARCHAR(50) NOT NULL,
                         last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                        metadata JSONB
+                        meta_data JSONB
                     )
                 """),
                 text("CREATE INDEX IF NOT EXISTS idx_dlfs_function_type ON deep_learning_function_status(function_type)"),
