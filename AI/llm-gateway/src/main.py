@@ -959,21 +959,8 @@ async def process_voice(
         user_text = transcription.text
 
         # 2. Chat: 텍스트 → ChatGPT 응답 (Function Calling 지원)
-        # System Prompt에 Function Calling 사용 안내 추가
-        base_system_prompt = system_prompt or settings.default_system_prompt
-        wrapped_system_prompt = f"""{base_system_prompt}
-
-중요: 사용자가 데이터 조회나 API 호출을 요청하면 반드시 제공된 함수를 사용해야 합니다. 일반적인 응답으로 대체하지 마세요.
-
-사용 가능한 함수:
-1. get_users_list: 사용자가 "사용자 목록", "사용자 리스트", "사용자 목록 보여줘", "사용자 조회" 등을 요청할 때 사용
-2. get_user_profile: 사용자가 "사용자 프로필", "사용자 정보", "사용자 상세" 등을 요청할 때 사용 (user_id 필요)
-3. get_user_relationships: 사용자가 "사용자 관계", "관계 정보" 등을 요청할 때 사용 (user_id 필요)
-
-규칙:
-- 사용자가 데이터 조회를 요청하면 반드시 해당 함수를 호출하세요
-- 함수를 사용할 수 있는 경우 일반적인 응답으로 대체하지 마세요
-- 함수 호출 결과를 받은 후 사용자에게 명확하게 전달하세요"""
+        # 통합 System Prompt 사용
+        wrapped_system_prompt = build_system_prompt(system_prompt)
         
         try:
             messages = await redis_session_manager.get_session(session_id)
