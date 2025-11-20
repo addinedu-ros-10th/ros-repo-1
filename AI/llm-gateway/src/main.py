@@ -1077,17 +1077,14 @@ async def process_voice(
             # 함수 실행
             for tool_call in message.tool_calls:
                 function_name = tool_call.function.name
-                logger.info(f"Voice process - Executing function: {function_name}")
                 try:
                     arguments = json.loads(tool_call.function.arguments)
-                    logger.debug(f"Voice process - Function arguments: {arguments}")
                 except json.JSONDecodeError as e:
                     logger.warning(f"Voice process - Failed to parse function arguments: {e}")
                     arguments = {}
                 
-                # 함수 실행
+                # 함수 실행 (로깅은 execute_function 내부에서 처리)
                 result = await execute_function(function_name, arguments, db_manager)
-                logger.info(f"Voice process - Function {function_name} result: success={result.get('success', False)}")
                 
                 # 결과를 메시지에 추가
                 messages.append({
