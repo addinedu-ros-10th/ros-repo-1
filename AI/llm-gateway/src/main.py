@@ -31,6 +31,7 @@ from .database import (
     db_manager, 
     save_conversation_to_db, 
     load_conversation_from_db,
+    save_customized_mobile_conversation_message,
     log_api_request,
     log_cost,
     KeywordVoiceprint,
