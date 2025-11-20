@@ -739,8 +739,7 @@ async def streaming_chat(request: TextChatRequest):
                     except json.JSONDecodeError:
                         tool_args = {}
                     
-                    # 함수 실행
-                    logger.info(f"Executing function: {tool_name} with args: {tool_args}")
+                    # 함수 실행 (로깅은 execute_function 내부에서 처리)
                     tool_result = await execute_function(tool_name, tool_args, db_manager)
                     
                     # tool_calls 정보를 메시지에 추가
