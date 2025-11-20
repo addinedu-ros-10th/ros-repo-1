@@ -173,6 +173,9 @@ async def execute_function(function_name: str, arguments: Dict[str, Any], db_man
     Returns:
         함수 실행 결과
     """
+    # 상세 로깅: 함수 호출 시작
+    logger.info(f"🔧 TOOL CALL START: function_name='{function_name}', arguments={arguments}")
+    
     try:
         if function_name == "get_users_list":
             return await _get_users_list(
@@ -210,23 +213,32 @@ async def execute_function(function_name: str, arguments: Dict[str, Any], db_man
         elif function_name == "activate_tracking":
             session_id = arguments.get("session_id")
             if not session_id:
+                logger.warning(f"🔧 TOOL CALL FAILED: activate_tracking - missing session_id")
                 return {"error": "session_id is required"}
-            return await _activate_tracking(session_id, db_manager)
+            logger.info(f"🔧 TOOL CALL: activate_tracking - session_id={session_id}")
+            result = await _activate_tracking(session_id, db_manager)
+            logger.info(f"🔧 TOOL CALL SUCCESS: activate_tracking - success={result.get('success', False)}")
+            return result
         
         elif function_name == "end_customized_mobile_conversation":
             session_id = arguments.get("session_id")
             if not session_id:
+                logger.warning(f"🔧 TOOL CALL FAILED: end_customized_mobile_conversation - missing session_id")
                 return {"error": "session_id is required"}
-            return await _end_customized_mobile_conversation(session_id, db_manager)
+            logger.info(f"🔧 TOOL CALL: end_customized_mobile_conversation - session_id={session_id}")
+            result = await _end_customized_mobile_conversation(session_id, db_manager)
+            logger.info(f"🔧 TOOL CALL SUCCESS: end_customized_mobile_conversation - success={result.get('success', False)}")
+            return result
         
         else:
+            logger.warning(f"🔧 TOOL CALL FAILED: Unknown function '{function_name}'. Available: {[tool['function']['name'] for tool in TOOLS]}")
             return {
                 "error": f"Unknown function: {function_name}",
                 "available_functions": [tool["function"]["name"] for tool in TOOLS]
             }
     
     except Exception as e:
-        logger.error(f"Function execution error: {e}", exc_info=True)
+        logger.error(f"🔧 TOOL CALL ERROR: function_name='{function_name}', error={str(e)}", exc_info=True)
         return {
             "error": str(e),
             "function": function_name

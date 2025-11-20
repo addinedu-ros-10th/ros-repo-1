@@ -45,6 +45,7 @@ from .database import (
 )
 from .tools import TOOLS, execute_function
 from .psychological_analysis import analyze_conversation_messages, save_psychological_analysis
+from .system_prompt_builder import build_system_prompt, get_tools_for_api
 import time
 
 # 로깅 설정
@@ -349,34 +350,13 @@ async def text_chat(request: TextChatRequest):
     """
     start_time = time.time()
     try:
-        # 기본값 설정
-        base_system_prompt = request.system_prompt or settings.default_system_prompt
-        # System Prompt에 Function Calling 사용 안내 및 심리 상담 가이드라인 추가
-        system_prompt = f"""{base_system_prompt}
-
-중요: 사용자가 데이터 조회나 API 호출을 요청하면 반드시 제공된 함수를 사용해야 합니다. 일반적인 응답으로 대체하지 마세요.
-
-사용 가능한 함수:
-1. get_users_list: 사용자가 "사용자 목록", "사용자 리스트", "사용자 목록 보여줘", "사용자 조회" 등을 요청할 때 사용
-2. get_user_profile: 사용자가 "사용자 프로필", "사용자 정보", "사용자 상세" 등을 요청할 때 사용 (user_id 필요)
-3. get_user_relationships: 사용자가 "사용자 관계", "관계 정보" 등을 요청할 때 사용 (user_id 필요)
-4. start_customized_mobile_conversation: 맞춤형 이동식 대화 시작 (YOLO 시작)
-5. activate_tracking: 추종 기능 활성화
-6. end_customized_mobile_conversation: 맞춤형 이동식 대화 종료
-
-규칙:
-- 사용자가 데이터 조회를 요청하면 반드시 해당 함수를 호출하세요
-- 함수를 사용할 수 있는 경우 일반적인 응답으로 대체하지 마세요
-- 함수 호출 결과를 받은 후 사용자에게 명확하게 전달하세요
-
-심리 상담 가이드라인 (어르신 대상):
-- 인지행동치료(CBT) 원칙: 부정적 사고 패턴을 인식하고 긍정적으로 전환하도록 돕습니다
-- 공감적 경청: 어르신의 감정을 깊이 이해하고 공감하며, 판단하지 않습니다
-- 긍정 심리학: 강점과 긍정적 경험에 초점을 맞춰 정서적 웰빙을 향상시킵니다
-- 감정 표현 촉진: 어르신이 자신의 감정을 자유롭게 표현할 수 있도록 안전한 환경을 제공합니다
-- 우울/불안/고립감 지표 모니터링: 대화 중 우울, 불안, 고립감의 징후를 주의 깊게 관찰하고 적절히 대응합니다
-- 건강 상태 관심: 신체적 건강과 수면 패턴에 대한 관심을 표현하고 필요시 전문가 상담을 권장합니다"""
+        # 통합 System Prompt 사용
+        system_prompt = build_system_prompt(request.system_prompt)
         model = request.model.value if request.model else settings.default_chat_model
+        
+        # TOOLS 가져오기 (통합 관리)
+        tools = get_tools_for_api()
+        logger.info(f"Chat API - TOOLS count: {len(tools)}, functions: {[t.get('function', {}).get('name') for t in tools]}")
         
         # 세션 히스토리 가져오기 또는 생성
         try:
@@ -430,12 +410,12 @@ async def text_chat(request: TextChatRequest):
             }
             
             # TOOLS가 비어있지 않을 때만 tools와 tool_choice 전달
-            if TOOLS and len(TOOLS) > 0:
-                api_params["tools"] = TOOLS
+            if tools and len(tools) > 0:
+                api_params["tools"] = tools
                 api_params["tool_choice"] = "auto"
-                logger.debug(f"Chat API call - iteration: {iteration}, tools provided: {len(TOOLS)}")
+                logger.info(f"Chat API call - iteration: {iteration}, tools provided: {len(tools)}")
             else:
-                logger.debug(f"Chat API call - iteration: {iteration}, no tools available")
+                logger.warning(f"Chat API call - iteration: {iteration}, no tools available")
             
             response = await client.chat.completions.create(**api_params)
             
@@ -446,10 +426,14 @@ async def text_chat(request: TextChatRequest):
                 hasattr(message, 'tool_calls') 
                 and message.tool_calls 
                 and len(message.tool_calls) > 0
-                and TOOLS 
-                and len(TOOLS) > 0
+                and tools 
+                and len(tools) > 0
             )
-            logger.debug(f"Message tool_calls: {has_tool_calls}, content: {message.content[:50] if message.content else 'None'}")
+            if has_tool_calls:
+                tool_names = [tc.function.name for tc in message.tool_calls]
+                logger.info(f"🔧 TOOL CALLS DETECTED: {tool_names}")
+            else:
+                logger.debug(f"Message tool_calls: {has_tool_calls}, content: {message.content[:50] if message.content else 'None'}")
             
             # 함수 호출이 없으면 종료
             if not has_tool_calls:
@@ -458,7 +442,7 @@ async def text_chat(request: TextChatRequest):
                 break
             
             # TOOLS가 없으면 tool_calls가 있어도 처리하지 않음
-            if not TOOLS or len(TOOLS) == 0:
+            if not tools or len(tools) == 0:
                 logger.warning("Tool calls detected but TOOLS is empty, using content as final response")
                 final_response = message.content
                 break
@@ -482,20 +466,17 @@ async def text_chat(request: TextChatRequest):
             messages.append(assistant_message)
             
             # 함수 실행
-            logger.info(f"Tool calls detected: {len(message.tool_calls)} calls")
+            logger.info(f"🔧 Processing {len(message.tool_calls)} tool call(s)")
             for tool_call in message.tool_calls:
                 function_name = tool_call.function.name
-                logger.info(f"Executing function: {function_name}")
                 try:
                     arguments = json.loads(tool_call.function.arguments)
-                    logger.debug(f"Function arguments: {arguments}")
                 except json.JSONDecodeError as e:
                     logger.warning(f"Failed to parse function arguments: {e}")
                     arguments = {}
                 
-                # 함수 실행
+                # 함수 실행 (로깅은 execute_function 내부에서 처리)
                 result = await execute_function(function_name, arguments, db_manager)
-                logger.info(f"Function {function_name} result: success={result.get('success', False)}")
                 
                 # 결과를 메시지에 추가
                 messages.append({
@@ -694,9 +675,12 @@ async def streaming_chat(request: TextChatRequest):
                 }
                 
                 # TOOLS가 비어있지 않을 때만 tools와 tool_choice 전달
-                if TOOLS and len(TOOLS) > 0:
-                    api_params["tools"] = TOOLS
+                if tools and len(tools) > 0:
+                    api_params["tools"] = tools
                     api_params["tool_choice"] = "auto"
+                    logger.info(f"Stream Chat API - iteration: {iteration}, tools provided: {len(tools)}")
+                else:
+                    logger.warning(f"Stream Chat API - iteration: {iteration}, no tools available")
                 
                 stream = await client.chat.completions.create(**api_params)
                 
@@ -1036,10 +1020,12 @@ async def process_voice(
             }
             
             # TOOLS가 비어있지 않을 때만 tools와 tool_choice 전달
-            if TOOLS and len(TOOLS) > 0:
-                api_params["tools"] = TOOLS
+            if tools and len(tools) > 0:
+                api_params["tools"] = tools
                 api_params["tool_choice"] = "auto"
-                logger.debug(f"Voice process - iteration: {iteration}, tools provided: {len(TOOLS)}")
+                logger.info(f"Voice process - iteration: {iteration}, tools provided: {len(tools)}")
+            else:
+                logger.warning(f"Voice process - iteration: {iteration}, no tools available")
             
             chat_response = await client.chat.completions.create(**api_params)
             
@@ -1050,9 +1036,13 @@ async def process_voice(
                 hasattr(message, 'tool_calls') 
                 and message.tool_calls 
                 and len(message.tool_calls) > 0
-                and TOOLS 
-                and len(TOOLS) > 0
+                and tools 
+                and len(tools) > 0
             )
+            
+            if has_tool_calls:
+                tool_names = [tc.function.name for tc in message.tool_calls]
+                logger.info(f"🔧 TOOL CALLS DETECTED (Voice): {tool_names}")
             
             # 함수 호출이 없으면 종료
             if not has_tool_calls:
@@ -1061,13 +1051,13 @@ async def process_voice(
                 break
             
             # TOOLS가 없으면 tool_calls가 있어도 처리하지 않음
-            if not TOOLS or len(TOOLS) == 0:
+            if not tools or len(tools) == 0:
                 logger.warning("Voice process - Tool calls detected but TOOLS is empty, using content as final response")
                 assistant_text = message.content
                 break
             
             # 함수 호출 정보를 메시지에 추가
-            logger.info(f"Voice process - Tool calls detected: {len(message.tool_calls)} calls")
+            logger.info(f"🔧 Processing {len(message.tool_calls)} tool call(s) (Voice)")
             assistant_message = {
                 "role": "assistant",
                 "content": message.content,
