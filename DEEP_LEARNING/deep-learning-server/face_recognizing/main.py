@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 import subprocess
+import threading
+import time
 
 import camera_receiver_yolo
 from camera_receiver_yolo import main
@@ -7,6 +9,9 @@ from camera_receiver_yolo import main
 app = FastAPI()
 
 SIGNAL_FLAG = 0
+process = None
+running = False
+thread = None
 
 @app.get("/")
 async def root():
@@ -17,9 +22,9 @@ def send_signal_run_yolo():
     global SIGNAL_FLAG
     SIGNAL_FLAG = 1
 
-    result = main()
+    main()
 
-    return {"status": f"test message: {result}"}\
+    return {"status": f"test message: yolo_terminated"}\
     
 @app.post("/send-signal_stop_yolo")
 def send_signal_stop_yolo():

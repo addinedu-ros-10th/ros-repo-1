@@ -1,6 +1,7 @@
 import socket
 import struct
 import time
+import sys
 
 import cv2
 import numpy as np
@@ -348,6 +349,7 @@ def main():
                 cv2.imshow("UDP MJPEG", show_image)
 
                 if key_input == ord('q') or process_stop_flag is True:
+                    process_stop_flag = False
                     break
                 elif key_input == ord('w'):
                     print("Tracking activated")
@@ -362,7 +364,7 @@ def main():
         rclpy.shutdown()
         cv2.destroyAllWindows()
 
-        return "yolo terminated"
+        # sys.exit(0)
 
 if __name__ == "__main__":
     main()
