@@ -519,6 +519,30 @@ async def text_chat(request: TextChatRequest):
         # 어시스턴트 응답 저장
         messages.append({"role": "assistant", "content": assistant_message})
         
+        # 맞춤형 이동식 대화 세션 확인 및 메시지 저장
+        is_cmc_session = False
+        if db_manager._initialized:
+            try:
+                with db_manager.get_session() as session:
+                    cmc_session = session.query(CustomizedMobileConversationSession).filter_by(
+                        session_id=request.session_id
+                    ).first()
+                    if cmc_session and cmc_session.status in ['yolo_running', 'tracking_active', 'conversation_active']:
+                        is_cmc_session = True
+                        # 맞춤형 이동식 대화 메시지 저장
+                        save_customized_mobile_conversation_message(
+                            session_id=request.session_id,
+                            role="user",
+                            content=request.message
+                        )
+                        save_customized_mobile_conversation_message(
+                            session_id=request.session_id,
+                            role="assistant",
+                            content=assistant_message
+                        )
+            except Exception as e:
+                logger.warning(f"Failed to check/save CMC session: {e}")
+        
         # Redis에 저장
         try:
             await redis_session_manager.save_session(request.session_id, messages)
