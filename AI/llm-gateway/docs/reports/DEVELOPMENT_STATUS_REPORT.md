@@ -1,204 +1,229 @@
 # 개발 현황 리포트
 
-**작성일**: 2025-11-19  
-**브랜치**: `feat/AI/llm-gateway__voice_interface__RP-22`
+**작성일:** 2025-11-20  
+**프로젝트:** 맞춤형 이동식 대화 기능 개선 및 TOOLS 통합 관리
 
 ---
 
-## 📋 최근 개발 내용 요약
+## 📋 주요 개발 내용
 
-### 1. IOT 문 제어 기능 추가 (최신)
+### 1. TOOLS 통합 관리 시스템 구축
 
-**구현일**: 2025-11-19
+#### 문제점
+- TOOLS 관리가 각 엔드포인트마다 분산되어 있었음
+- `/api/chat`, `/api/chat/stream`, `/api/voice/process`에서 각각 다른 방식으로 TOOLS 전달
+- TOOLS 업데이트 시 모든 엔드포인트를 수정해야 했음
+- System Prompt도 각 엔드포인트마다 다르게 구성
 
-**기능**:
-- ESP32 서보 모터를 통한 문 제어 API 통합
-- GPT Function Calling으로 자연어 제어 가능
+#### 해결 방법
+- **`system_prompt_builder.py` 모듈 생성**
+  - `build_system_prompt()`: 통합 System Prompt 생성
+  - `get_tools_for_api()`: 통합 TOOLS 목록 반환
+  - 모든 엔드포인트에서 동일한 System Prompt 사용
+  - TOOLS 목록 자동 포함
 
-**세부 사항**:
-- `control_door` 함수 추가
-  - action: "open" 또는 "close"
-  - servo1: 열림 0도, 닫힘 180도
-  - servo2: 열림 170도, 닫힘 0도
-  - 두 서보 동시 제어 (비동기 병렬 처리)
-- 자연어 인식: "문 열어줘", "문 닫아줘" 등
-- 에러 처리 및 로깅 추가
+- **모든 LLM API 엔드포인트 통합**
+  - `/api/chat`: 통합 System Prompt 및 TOOLS 사용
+  - `/api/chat/stream`: 통합 System Prompt 및 TOOLS 사용
+  - `/api/voice/process`: 통합 System Prompt 및 TOOLS 사용
 
-**파일 변경**:
-- `src/tools.py`: control_door 함수 추가
-- `docs/development/IOT_DOOR_CONTROL_PLAN.md`: 구현 계획 문서
-
-**커밋**: `3728c7b` - feat: IOT 문 제어 기능 추가 (Function Calling)
-
----
-
-### 2. 키워드 음성 지문 기능 전면 수정
-
-**구현일**: 2025-11-19
-
-**문제점**:
-- voiceprint 20개 제한 문제
-- session_id 필터링 불일치로 인한 중복 등록
-- 키워드 매칭 실패
-
-**수정 사항**:
-- 음성 지문 등록 시 `session_id` 필터링 제거
-- `base_keyword`와 `stt_keyword` 조합으로만 중복 체크
-- 키워드 체크 로직 개선 (모든 세션의 voiceprint 확인)
-- 디버깅 로그 추가
-
-**파일 변경**:
-- `src/main.py`: voiceprint 등록/조회/체크 로직 수정
-- `tests/user_testing/test_voiceprint_management.html`: total_count 표시 추가
-- `docs/reports/KEYWORD_VOICEPRINT_COMPREHENSIVE_ANALYSIS.md`: 분석 리포트
-
-**커밋**: `9b07846` - fix: 키워드 음성 지문 기능 전면 수정
+#### 효과
+- TOOLS 업데이트 시 모든 엔드포인트에 자동 반영
+- System Prompt 일관성 보장
+- 유지보수성 향상
 
 ---
 
-### 3. STT aborted 오류 수정 및 voiceprint 조회 개선
+### 2. 상세 로깅 시스템 추가
 
-**구현일**: 2025-11-19
+#### 구현 내용
+- **TOOLS 호출 로깅 (🔧 이모지로 구분)**
+  - `🔧 TOOL CALL START`: 함수 호출 시작 (함수명, 인자)
+  - `🔧 TOOL CALL SUCCESS`: 함수 호출 성공
+  - `🔧 TOOL CALL FAILED`: 함수 호출 실패
+  - `🔧 TOOL CALLS DETECTED`: LLM이 함수 호출 감지
 
-**문제점**:
-- STT aborted 오류 발생
-- voiceprint 20개 제한 문제
+- **TOOLS 정보 로깅**
+  - TOOLS 개수 및 함수 목록 로깅
+  - 각 엔드포인트별 TOOLS 사용 현황
 
-**수정 사항**:
-- STT aborted 오류 무시 처리 추가
-- recognition 상태 확인 로직 개선
-- voiceprint 조회 시 전체 개수(total_count) 반환 추가
-- 클라이언트에서 전체 개수와 반환된 개수 비교 표시
-
-**파일 변경**:
-- `tests/user_testing/test_alfred_voice.html`: STT 오류 처리 개선
-- `src/main.py`: voiceprint 조회 개선
-
-**커밋**: `901dcde` - fix: STT aborted 오류 수정 및 voiceprint 조회 개선
+#### 효과
+- 함수 호출 여부를 쉽게 확인 가능
+- 디버깅 시간 단축
+- 문제 발생 시 빠른 원인 파악
 
 ---
 
-### 4. 음성 인터페이스에 Function Calling 지원 추가
+### 3. 맞춤형 이동식 대화 기능 개선
 
-**구현일**: 2025-11-19
+#### 문제점
+1. **세션 중복 생성 오류 (UniqueViolation)**
+   - 같은 `session_id`로 재시도 시 기존 세션을 확인하지 않고 새로 생성
+   - `duplicate key value violates unique constraint` 발생
 
-**기능**:
-- `/api/voice/process` 엔드포인트에 Function Calling 지원 추가
-- 음성 명령으로도 API 호출 가능
+2. **YOLO API 타임아웃**
+   - 30초 타임아웃으로 응답 없음
+   - 맞춤형 이동식 대화는 러닝 타임이 길어 타임아웃 발생 가능
 
-**세부 사항**:
-- system_prompt를 Form 파라미터로 받도록 수정
-- Function Calling 로직 통합
-- 로깅 추가
+3. **에러 발생 시 세션 상태 미업데이트**
+   - 타임아웃/HTTP 에러/연결 오류 발생 시 DB 상태가 업데이트되지 않음
+   - 재시도 시 이전 상태가 남아 문제 발생
 
-**파일 변경**:
-- `src/main.py`: process_voice 엔드포인트 수정
-- `tests/user_testing/test_chat_interface.html`: voice 메시지 전송 로직 수정
+4. **블로킹 문제**
+   - `await`로 YOLO API 응답을 기다려 사용자 응답 지연
+   - YOLO API는 "terminated 되기 전까지 계속 호출 상태가 지속"됨
 
-**커밋**: `e95a5ab` - feat: 음성 인터페이스에 Function Calling 지원 추가
+#### 해결 방법
 
----
+**1. 세션 관리 개선**
+- 세션 생성 전 기존 세션 확인
+- 기존 세션이 있으면 업데이트, 없으면 생성
+- 재시작 시 상태 초기화 (`ended_at`, `yolo_started_at` 등)
+- YOLO 상태도 업데이트 또는 생성
 
-### 5. 마이크 권한 문제 해결 및 브라우저 호환성 개선
+**2. YOLO API 호출 개선 (Fire-and-Forget)**
+- `asyncio.create_task()`로 백그라운드 태스크 실행
+- API 호출 시작 후 즉시 반환 (비블로킹)
+- 타임아웃 60초 → 120초로 증가
+- 타임아웃 발생 시에도 YOLO 실행 중일 수 있으므로 `'yolo_running'` 상태로 설정
 
-**구현일**: 2025-11-19
+**3. 에러 처리 개선**
+- 모든 에러 케이스에서 세션 상태를 `'error'`로 업데이트
+- 타임아웃, HTTP 에러, 연결 오류 모두 처리
+- 에러 정보를 `meta_data`에 저장
+- 사용자 친화적인 에러 메시지 제공
 
-**문제점**:
-- 마이크 사용 권한 오류
-- 브라우저 호환성 문제
+**4. 함수 description 개선**
+- `user_id` 추출 방법 명확화
+- '맞춤형 이동식 대화를 하고 싶어' 패턴 추가
+- 사용자가 말한 이름을 그대로 사용하도록 안내
 
-**수정 사항**:
-- getUserMedia 헬퍼 함수 추가 (브라우저 호환성)
-- HTTPS 체크 추가
-- 상세한 에러 메시지 제공
-
-**파일 변경**:
-- `tests/user_testing/test_chat_interface.html`: 마이크 권한 처리 개선
-
-**커밋**: `f1c9d09` - fix: 마이크 권한 문제 해결 및 브라우저 호환성 개선
-
----
-
-### 6. 스트리밍 응답 파싱 개선 및 UI 표시 문제 수정
-
-**구현일**: 2025-11-19
-
-**문제점**:
-- 스트리밍 응답이 UI에 표시되지 않음
-- SSE 파싱 문제
-
-**수정 사항**:
-- 버퍼 기반 SSE 파싱 구현
-- appendToMessage 함수 개선
-- 에러 처리 강화
-
-**파일 변경**:
-- `tests/user_testing/test_chat_interface.html`: 스트리밍 파싱 개선
-
-**커밋**: `27dbd2a` - fix: 스트리밍 응답 파싱 개선 및 UI 표시 문제 수정
+#### 효과
+- 재시도 시 세션 중복 생성 오류 해결
+- 사용자 응답 즉시 반환 (비블로킹)
+- YOLO API 타임아웃 발생률 감소
+- 에러 발생 시 세션 상태가 정확히 업데이트되어 재시도 가능
 
 ---
 
-## 📊 전체 개발 통계
+### 4. SQLAlchemy 예약어 충돌 해결
 
-### 커밋 통계
-- 최근 10개 커밋
-- 주요 기능 추가: 2개
-- 버그 수정: 4개
-- 문서화: 2개
+#### 문제점
+- `metadata`는 SQLAlchemy Declarative API의 예약어
+- `DeepLearningFunctionStatus` 클래스에서 `metadata` 컬럼 사용 시 에러 발생
 
-### 파일 변경 통계
-- 수정된 파일: 약 10개
-- 새로 생성된 파일: 약 5개
-- 주요 변경 파일:
-  - `src/tools.py`: IOT 제어 기능 추가
-  - `src/main.py`: 키워드 기능 수정, Function Calling 지원
-  - `tests/user_testing/test_alfred_voice.html`: 키워드 기능 개선
-  - `tests/user_testing/test_voiceprint_management.html`: 조회 기능 개선
+#### 해결 방법
+- `metadata` → `meta_data`로 컬럼명 변경
+- 모든 참조 업데이트 (database.py, tools.py)
+- 테이블 생성 SQL도 업데이트
 
 ---
 
-## 🎯 주요 성과
+### 5. 문서화
 
-1. **IOT 제어 기능 통합**
-   - ESP32 서보 모터 제어 API 통합
-   - 자연어로 문 제어 가능
-
-2. **키워드 음성 지문 기능 정상화**
-   - session_id 필터링 문제 해결
-   - 중복 등록 문제 해결
-   - 키워드 매칭 정상화
-
-3. **Function Calling 지원 확대**
-   - 음성 인터페이스에도 Function Calling 지원
-   - 텍스트/음성 모두에서 API 호출 가능
-
-4. **사용자 경험 개선**
-   - STT 오류 처리 개선
-   - 마이크 권한 문제 해결
-   - 스트리밍 응답 표시 개선
+#### 추가된 문서
+- **`CUSTOMIZED_MOBILE_CONVERSATION_ISSUES.md`**
+  - 문제 해결 가이드
+  - 음성 인터페이스 사용 가이드
+  - 문제 해결 체크리스트
+  - 향후 개선 방안
 
 ---
 
-## 📝 다음 단계
+## 📊 통계
 
-1. **테스트 및 검증**
-   - IOT 문 제어 기능 테스트
-   - 키워드 음성 지문 기능 테스트
-   - Function Calling 통합 테스트
+### 변경된 파일
+- `src/system_prompt_builder.py` (신규)
+- `src/main.py` (통합 System Prompt 및 TOOLS 사용)
+- `src/tools.py` (세션 관리, 에러 처리, fire-and-forget 개선)
+- `src/database.py` (meta_data 변경)
+- `docs/troubleshooting/CUSTOMIZED_MOBILE_CONVERSATION_ISSUES.md` (신규)
 
-2. **문서화**
-   - API 사용 가이드 업데이트
-   - IOT 제어 기능 사용 가이드 작성
+### 커밋 수
+- 총 10개 이상의 커밋
 
-3. **성능 최적화**
-   - API 호출 최적화
+---
+
+## 🔧 기술 스택
+
+- **비동기 처리**: `asyncio.create_task()`, `httpx.AsyncClient`
+- **데이터베이스**: PostgreSQL, SQLAlchemy ORM
+- **로깅**: Python logging with emoji markers
+- **API 통합**: FastAPI, OpenAI Function Calling
+
+---
+
+## ✅ 완료된 작업
+
+1. ✅ TOOLS 통합 관리 시스템 구축
+2. ✅ System Prompt 통합 관리
+3. ✅ 상세 로깅 시스템 추가
+4. ✅ 맞춤형 이동식 대화 세션 관리 개선
+5. ✅ YOLO API fire-and-forget 방식 구현
+6. ✅ 에러 처리 개선
+7. ✅ SQLAlchemy 예약어 충돌 해결
+8. ✅ 문서화
+
+---
+
+## 🚀 향후 개선 방안
+
+### 단기
+1. **비동기 처리 개선**
+   - YOLO 상태를 주기적으로 확인하는 API 추가
+   - WebSocket을 통한 실시간 상태 업데이트
+
+2. **재시도 로직**
+   - 타임아웃 발생 시 자동 재시도
+   - 최대 재시도 횟수 제한
+
+3. **user_id 매핑**
+   - 사용자 이름 → 실제 user_id 매핑 테이블
+   - 세션 정보에서 user_id 자동 추출
+
+### 장기
+1. **상태 모니터링 대시보드**
+   - YOLO 실행 상태 실시간 모니터링
+   - 상태 변경 시 알림 기능
+
+2. **성능 최적화**
+   - 캐싱 전략 도입
+   - 데이터베이스 쿼리 최적화
+
+---
+
+## 📝 주요 커밋
+
+1. `6b72f45`: YOLO API 호출을 fire-and-forget 방식으로 변경
+2. `20787b1`: 맞춤형 이동식 대화 세션 관리 및 에러 처리 개선
+3. `16bebd2`: TOOLS 통합 관리 및 상세 로깅 추가
+4. `c032ee8`: `/api/voice/process`에서도 통합 System Prompt 사용
+5. `2c4e513`: start_customized_mobile_conversation 함수 description 개선
+6. `ba6e222`: 테이블 생성 SQL에서도 metadata를 meta_data로 변경
+7. `32aaffc`: SQLAlchemy 예약어 충돌 해결 - metadata를 meta_data로 변경
+
+---
+
+## 🎯 성과
+
+1. **개발 생산성 향상**
+   - TOOLS 업데이트 시 모든 엔드포인트에 자동 반영
+   - 유지보수 시간 단축
+
+2. **사용자 경험 개선**
+   - 즉시 응답 반환 (비블로킹)
+   - 명확한 에러 메시지 제공
+
+3. **안정성 향상**
+   - 세션 중복 생성 오류 해결
    - 에러 처리 개선
+   - 상태 관리 정확도 향상
+
+4. **디버깅 효율성 향상**
+   - 상세 로깅으로 문제 파악 시간 단축
+   - 이모지 마커로 로그 가독성 향상
 
 ---
 
-## 🔗 관련 문서
-
-- [IOT 문 제어 구현 계획](./development/IOT_DOOR_CONTROL_PLAN.md)
-- [키워드 음성 지문 전면 분석](./reports/KEYWORD_VOICEPRINT_COMPREHENSIVE_ANALYSIS.md)
-- [Function Calling 개발 리포트](./development/FUNCTION_CALLING_DEVELOPMENT_REPORT.md)
+**작성자:** AI Assistant  
+**검토 필요:** 코드 리뷰 및 테스트
