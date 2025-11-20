@@ -107,7 +107,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "start_customized_mobile_conversation",
-            "description": "맞춤형 이동식 대화를 시작합니다. 사용자가 '대화를 하고 싶어', '맞춤 대화를 시작해줘', '맞춤형 이동식 대화를 하고 싶어', '대화 좀 나눌 수 있을까', '함께 이야기 하자', '산책 하면서 같이 이야기 할래' 등을 요청할 때 반드시 이 함수를 호출하세요. YOLO 객체 인식 프로그램을 시작하여 맞춤형 이동식 대화 기능을 활성화합니다. 함수 호출 성공 후 반드시 사용자에게 '함께 걸으며 대화 할까요?'라고 물어봐야 합니다. user_id는 사용자가 말한 이름(예: '서보리')을 기반으로 추출하거나, 세션 정보에서 가져와야 합니다.",
+            "description": "맞춤형 이동식 대화를 시작합니다. 사용자가 '대화를 하고 싶어', '맞춤 대화를 시작해줘', '맞춤형 이동식 대화를 하고 싶어', '대화 좀 나눌 수 있을까', '함께 이야기 하자', '산책 하면서 같이 이야기 할래' 등을 요청할 때 반드시 이 함수를 호출하세요. YOLO 객체 인식 프로그램을 시작하여 맞춤형 이동식 대화 기능을 활성화합니다. 함수 호출 성공 후 반드시 사용자에게 '함께 걸으며 대화 할까요?'라고 물어봐야 합니다. user_id는 사용자가 말한 이름(예: '서보리', '보리')을 그대로 사용하거나, 이전 대화에서 언급된 이름을 사용하세요. 정확한 user_id를 모르는 경우 사용자가 말한 이름을 그대로 사용해도 됩니다.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -603,35 +603,66 @@ async def _start_customized_mobile_conversation(session_id: str, user_id: str, d
     try:
         logger.info(f"Starting customized mobile conversation: session_id={session_id}, user_id={user_id}")
         
-        # 1. DB에 세션 생성
+        # 1. DB에 세션 생성 또는 업데이트
         if db_manager and db_manager._initialized:
             try:
                 from .database import CustomizedMobileConversationSession, DeepLearningFunctionStatus
                 with db_manager.get_session() as session:
-                    # 세션 생성
-                    cmc_session = CustomizedMobileConversationSession(
-                        session_id=session_id,
-                        user_id=user_id,
-                        started_at=datetime.utcnow(),
-                        status='yolo_starting'
-                    )
-                    session.add(cmc_session)
+                    # 기존 세션 확인
+                    cmc_session = session.query(CustomizedMobileConversationSession).filter_by(session_id=session_id).first()
                     
-                    # YOLO 상태 저장
-                    yolo_status = DeepLearningFunctionStatus(
+                    if cmc_session:
+                        # 기존 세션이 있으면 업데이트
+                        logger.info(f"Updating existing CMC session: session_id={session_id}")
+                        cmc_session.user_id = user_id
+                        cmc_session.started_at = datetime.utcnow()
+                        cmc_session.status = 'yolo_starting'
+                        cmc_session.ended_at = None  # 재시작 시 종료 시간 초기화
+                        cmc_session.yolo_started_at = None
+                        cmc_session.yolo_ended_at = None
+                        cmc_session.tracking_activated_at = None
+                        cmc_session.tracking_deactivated_at = None
+                    else:
+                        # 새 세션 생성
+                        logger.info(f"Creating new CMC session: session_id={session_id}")
+                        cmc_session = CustomizedMobileConversationSession(
+                            session_id=session_id,
+                            user_id=user_id,
+                            started_at=datetime.utcnow(),
+                            status='yolo_starting'
+                        )
+                        session.add(cmc_session)
+                    
+                    # YOLO 상태 확인 및 업데이트
+                    yolo_status = session.query(DeepLearningFunctionStatus).filter_by(
                         function_type='yolo',
-                        session_id=session_id,
-                        status='starting',
-                        meta_data={'user_id': user_id}
-                    )
-                    session.add(yolo_status)
+                        session_id=session_id
+                    ).first()
+                    
+                    if yolo_status:
+                        # 기존 상태 업데이트
+                        yolo_status.status = 'starting'
+                        yolo_status.last_updated = datetime.utcnow()
+                        yolo_status.meta_data = {'user_id': user_id}
+                    else:
+                        # 새 상태 생성
+                        yolo_status = DeepLearningFunctionStatus(
+                            function_type='yolo',
+                            session_id=session_id,
+                            status='starting',
+                            meta_data={'user_id': user_id}
+                        )
+                        session.add(yolo_status)
+                    
                     session.commit()
-                    logger.info(f"Created CMC session and YOLO status in DB: session_id={session_id}")
+                    logger.info(f"CMC session and YOLO status saved/updated in DB: session_id={session_id}")
             except Exception as db_error:
-                logger.warning(f"Failed to save session to DB: {db_error}, continuing with API call")
+                logger.error(f"Failed to save/update session to DB: {db_error}", exc_info=True)
+                # DB 오류가 있어도 API 호출은 계속 진행
         
         # 2. YOLO 시작 API 호출 (비동기)
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        # YOLO API는 러닝 타임이 길 수 있으므로 타임아웃을 60초로 설정
+        async with httpx.AsyncClient(timeout=60.0) as client:
             try:
                 response = await client.post(
                     f"{IOT_BASE_URL}/send-signal_run_yolo",
@@ -673,28 +704,97 @@ async def _start_customized_mobile_conversation(session_id: str, user_id: str, d
             
             except httpx.TimeoutException:
                 logger.error(f"YOLO start timeout: session_id={session_id}")
+                
+                # 타임아웃 발생 시 DB 상태 업데이트
+                if db_manager and db_manager._initialized:
+                    try:
+                        from .database import CustomizedMobileConversationSession, DeepLearningFunctionStatus
+                        with db_manager.get_session() as session:
+                            cmc_session = session.query(CustomizedMobileConversationSession).filter_by(session_id=session_id).first()
+                            if cmc_session:
+                                cmc_session.status = 'error'
+                                cmc_session.updated_at = datetime.utcnow()
+                            
+                            yolo_status = session.query(DeepLearningFunctionStatus).filter_by(function_type='yolo', session_id=session_id).first()
+                            if yolo_status:
+                                yolo_status.status = 'error'
+                                yolo_status.last_updated = datetime.utcnow()
+                                yolo_status.meta_data = yolo_status.meta_data or {}
+                                yolo_status.meta_data['error'] = 'timeout'
+                            
+                            session.commit()
+                    except Exception as db_error:
+                        logger.warning(f"Failed to update timeout status in DB: {db_error}")
+                
                 return {
                     "success": False,
-                    "error": "YOLO 시작 요청 타임아웃 (30초 초과)",
-                    "session_id": session_id
+                    "error": "YOLO 시작 요청 타임아웃 (30초 초과). IOT 서버가 응답하지 않거나 네트워크 문제가 있을 수 있습니다.",
+                    "session_id": session_id,
+                    "suggestion": "잠시 후 다시 시도해주세요."
                 }
             
             except httpx.HTTPStatusError as e:
                 logger.error(f"YOLO start HTTP error: {e.response.status_code}, session_id={session_id}")
+                
+                # HTTP 에러 발생 시 DB 상태 업데이트
+                if db_manager and db_manager._initialized:
+                    try:
+                        from .database import CustomizedMobileConversationSession, DeepLearningFunctionStatus
+                        with db_manager.get_session() as session:
+                            cmc_session = session.query(CustomizedMobileConversationSession).filter_by(session_id=session_id).first()
+                            if cmc_session:
+                                cmc_session.status = 'error'
+                                cmc_session.updated_at = datetime.utcnow()
+                            
+                            yolo_status = session.query(DeepLearningFunctionStatus).filter_by(function_type='yolo', session_id=session_id).first()
+                            if yolo_status:
+                                yolo_status.status = 'error'
+                                yolo_status.last_updated = datetime.utcnow()
+                                yolo_status.meta_data = yolo_status.meta_data or {}
+                                yolo_status.meta_data['error'] = f'http_error_{e.response.status_code}'
+                            
+                            session.commit()
+                    except Exception as db_error:
+                        logger.warning(f"Failed to update HTTP error status in DB: {db_error}")
+                
                 return {
                     "success": False,
-                    "error": f"HTTP error: {e.response.status_code}",
+                    "error": f"IOT 서버 HTTP 오류: {e.response.status_code}",
                     "status_code": e.response.status_code,
                     "response": e.response.text[:500] if e.response.text else None,
-                    "session_id": session_id
+                    "session_id": session_id,
+                    "suggestion": "IOT 서버 상태를 확인해주세요."
                 }
             
             except httpx.ConnectError:
                 logger.error(f"YOLO start connection error: session_id={session_id}")
+                
+                # 연결 오류 발생 시 DB 상태 업데이트
+                if db_manager and db_manager._initialized:
+                    try:
+                        from .database import CustomizedMobileConversationSession, DeepLearningFunctionStatus
+                        with db_manager.get_session() as session:
+                            cmc_session = session.query(CustomizedMobileConversationSession).filter_by(session_id=session_id).first()
+                            if cmc_session:
+                                cmc_session.status = 'error'
+                                cmc_session.updated_at = datetime.utcnow()
+                            
+                            yolo_status = session.query(DeepLearningFunctionStatus).filter_by(function_type='yolo', session_id=session_id).first()
+                            if yolo_status:
+                                yolo_status.status = 'error'
+                                yolo_status.last_updated = datetime.utcnow()
+                                yolo_status.meta_data = yolo_status.meta_data or {}
+                                yolo_status.meta_data['error'] = 'connection_error'
+                            
+                            session.commit()
+                    except Exception as db_error:
+                        logger.warning(f"Failed to update connection error status in DB: {db_error}")
+                
                 return {
                     "success": False,
-                    "error": "IOT 서버 연결 오류",
-                    "session_id": session_id
+                    "error": "IOT 서버 연결 오류. 서버가 실행 중인지 확인해주세요.",
+                    "session_id": session_id,
+                    "suggestion": "네트워크 연결 및 IOT 서버 상태를 확인해주세요."
                 }
     
     except Exception as e:
