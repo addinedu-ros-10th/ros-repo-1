@@ -1011,6 +1011,10 @@ async def process_voice(
         iteration = 0
         assistant_text = None
         
+        # TOOLS 가져오기 (통합 관리) - while 루프 전에 정의
+        tools = get_tools_for_api()
+        logger.info(f"Voice Process API - TOOLS count: {len(tools)}, functions: {[t.get('function', {}).get('name') for t in tools]}")
+        
         while iteration < max_iterations:
             # tools와 tool_choice는 TOOLS가 비어있지 않을 때만 전달
             api_params = {
