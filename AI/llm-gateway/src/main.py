@@ -35,7 +35,12 @@ from .database import (
     log_cost,
     KeywordVoiceprint,
     SystemPrompt,
-    SystemPromptUsage
+    SystemPromptUsage,
+    CustomizedMobileConversationSession,
+    CustomizedMobileConversationMessage,
+    PsychologicalCounselingAnalysis,
+    CounselingReport,
+    IOTDeviceStatus
 )
 from .tools import TOOLS, execute_function
 import time

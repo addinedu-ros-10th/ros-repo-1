@@ -157,6 +157,104 @@ class SystemPromptUsage(Base):
     )
 
 
+class CustomizedMobileConversationSession(Base):
+    """맞춤형 이동식 대화 세션 테이블"""
+    __tablename__ = "customized_mobile_conversation_sessions"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(255), unique=True, nullable=False, index=True)
+    user_id = Column(String(255), nullable=False, index=True)
+    started_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime, nullable=True)
+    yolo_started_at = Column(DateTime, nullable=True)
+    yolo_ended_at = Column(DateTime, nullable=True)
+    tracking_activated_at = Column(DateTime, nullable=True)
+    tracking_deactivated_at = Column(DateTime, nullable=True)
+    status = Column(String(50), nullable=False, default='waiting')  # waiting, yolo_starting, yolo_running, tracking_active, conversation_active, ending, ended
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # 인덱스
+    __table_args__ = (
+        Index('idx_cmcs_user_created', 'user_id', 'created_at'),
+        Index('idx_cmcs_status', 'status'),
+    )
+
+
+class CustomizedMobileConversationMessage(Base):
+    """맞춤형 이동식 대화 메시지 테이블"""
+    __tablename__ = "customized_mobile_conversation_messages"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(255), nullable=False, index=True)
+    message_order = Column(Integer, nullable=False)
+    role = Column(String(50), nullable=False)  # user, assistant
+    content = Column(Text, nullable=False)
+    emotion_analysis = Column(JSON, nullable=True)  # 감정 분석 결과 (JSON)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # 인덱스
+    __table_args__ = (
+        Index('idx_cmcm_session_order', 'session_id', 'message_order'),
+    )
+
+
+class PsychologicalCounselingAnalysis(Base):
+    """심리 상담 분석 테이블"""
+    __tablename__ = "psychological_counseling_analysis"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(255), nullable=False, index=True)
+    analysis_type = Column(String(100), nullable=False)  # psychological, emotional, health
+    analysis_result = Column(JSON, nullable=False)  # 분석 결과 (JSON)
+    score = Column(Integer, nullable=True)  # 0-100 점수
+    grade = Column(String(50), nullable=True)  # excellent, good, normal, concern, warning
+    analyzed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # 인덱스
+    __table_args__ = (
+        Index('idx_pca_session_type', 'session_id', 'analysis_type'),
+        Index('idx_pca_analyzed', 'analyzed_at'),
+    )
+
+
+class CounselingReport(Base):
+    """심리 상담 리포트 테이블"""
+    __tablename__ = "counseling_reports"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(255), nullable=False, index=True)
+    report_type = Column(String(100), nullable=False)  # daily, weekly, monthly, session
+    report_content = Column(JSON, nullable=False)  # 리포트 내용 (JSON)
+    shared_with = Column(JSON, nullable=True)  # 공유 대상 ['staff', 'caregiver', 'social_worker', 'family']
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by = Column(String(255), nullable=True)  # 리포트 생성자
+    
+    # 인덱스
+    __table_args__ = (
+        Index('idx_cr_session_type', 'session_id', 'report_type'),
+        Index('idx_cr_created', 'created_at'),
+    )
+
+
+class IOTDeviceStatus(Base):
+    """IOT 장치 상태 관리 테이블"""
+    __tablename__ = "iot_device_status"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    device_type = Column(String(50), nullable=False, index=True)  # yolo, tracking
+    session_id = Column(String(255), nullable=True, index=True)
+    status = Column(String(50), nullable=False)  # active, inactive, starting, stopping, error
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    metadata = Column(JSON, nullable=True)  # 추가 메타데이터 (JSON)
+    
+    # 인덱스
+    __table_args__ = (
+        Index('idx_ids_device_status', 'device_type', 'status'),
+        Index('idx_ids_session', 'session_id'),
+    )
+
+
 # ============= 데이터베이스 관리 클래스 =============
 
 class DatabaseManager:
@@ -341,7 +439,12 @@ class DatabaseManager:
         
         from sqlalchemy import inspect
         inspector = inspect(self.engine)
-        required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints', 'system_prompts', 'system_prompt_usage'}
+        required_tables = {
+            'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 
+            'keyword_voiceprints', 'system_prompts', 'system_prompt_usage',
+            'customized_mobile_conversation_sessions', 'customized_mobile_conversation_messages',
+            'psychological_counseling_analysis', 'counseling_reports', 'iot_device_status'
+        }
         
         # 현재 스키마 확인
         try:
@@ -521,7 +624,12 @@ class DatabaseManager:
                     from sqlalchemy import inspect
                     inspector = inspect(self.engine)
                     existing_tables = set(inspector.get_table_names())
-                    required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints', 'system_prompts', 'system_prompt_usage'}
+                    required_tables = {
+            'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 
+            'keyword_voiceprints', 'system_prompts', 'system_prompt_usage',
+            'customized_mobile_conversation_sessions', 'customized_mobile_conversation_messages',
+            'psychological_counseling_analysis', 'counseling_reports', 'iot_device_status'
+        }
                     
                     if required_tables.issubset(existing_tables):
                         print(f"✓ All required tables verified: {', '.join(sorted(required_tables))}")
@@ -561,7 +669,12 @@ class DatabaseManager:
     def _grant_permissions(self):
         """다른 사용자 계정에 테이블 권한 부여"""
         try:
-            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints', 'system_prompts', 'system_prompt_usage'}
+            required_tables = {
+            'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 
+            'keyword_voiceprints', 'system_prompts', 'system_prompt_usage',
+            'customized_mobile_conversation_sessions', 'customized_mobile_conversation_messages',
+            'psychological_counseling_analysis', 'counseling_reports', 'iot_device_status'
+        }
             
             # 권한을 부여할 추가 사용자 목록 (환경 변수에서 읽거나 기본값 사용)
             additional_users = []
@@ -866,7 +979,12 @@ class DatabaseManager:
             from sqlalchemy import inspect
             inspector = inspect(self.engine)
             existing_tables = set(inspector.get_table_names())
-            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints', 'system_prompts', 'system_prompt_usage'}
+            required_tables = {
+            'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 
+            'keyword_voiceprints', 'system_prompts', 'system_prompt_usage',
+            'customized_mobile_conversation_sessions', 'customized_mobile_conversation_messages',
+            'psychological_counseling_analysis', 'counseling_reports', 'iot_device_status'
+        }
             
             if not required_tables.issubset(existing_tables):
                 missing = required_tables - existing_tables
@@ -889,7 +1007,12 @@ class DatabaseManager:
             }
         
         try:
-            required_tables = {'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 'keyword_voiceprints', 'system_prompts', 'system_prompt_usage'}
+            required_tables = {
+            'conversation_sessions', 'conversation_messages', 'api_request_logs', 'cost_logs', 
+            'keyword_voiceprints', 'system_prompts', 'system_prompt_usage',
+            'customized_mobile_conversation_sessions', 'customized_mobile_conversation_messages',
+            'psychological_counseling_analysis', 'counseling_reports', 'iot_device_status'
+        }
             
             # 현재 스키마 및 데이터베이스 정보 확인
             current_schema = None
@@ -1036,6 +1159,36 @@ def load_conversation_from_db(session_id: str) -> List[Dict[str, str]]:
     except Exception as e:
         logger.error(f"Failed to load conversation from DB: {e}", exc_info=True)
         return []
+
+
+def save_customized_mobile_conversation_message(session_id: str, role: str, content: str, emotion_analysis: Optional[Dict] = None):
+    """맞춤형 이동식 대화 메시지 저장"""
+    if not db_manager._initialized:
+        logger.debug("Database not initialized, skipping CMC message save")
+        return
+    
+    try:
+        with db_manager.get_session() as session:
+            # 현재 세션의 최대 message_order 조회
+            max_order = session.query(
+                func.max(CustomizedMobileConversationMessage.message_order)
+            ).filter_by(session_id=session_id).scalar()
+            
+            next_order = (max_order or 0) + 1
+            
+            # 메시지 저장
+            message = CustomizedMobileConversationMessage(
+                session_id=session_id,
+                message_order=next_order,
+                role=role,
+                content=content,
+                emotion_analysis=emotion_analysis
+            )
+            session.add(message)
+            session.commit()
+            logger.debug(f"Saved CMC message: session_id={session_id}, order={next_order}, role={role}")
+    except Exception as e:
+        logger.error(f"Failed to save CMC message to DB: {e}", exc_info=True)
 
 
 def log_api_request(session_id: Optional[str], endpoint: str, method: str, 
