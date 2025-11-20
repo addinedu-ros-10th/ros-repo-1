@@ -594,7 +594,7 @@ async def _start_customized_mobile_conversation(session_id: str, user_id: str, d
         # 1. DB에 세션 생성
         if db_manager and db_manager._initialized:
             try:
-                from .database import CustomizedMobileConversationSession, IOTDeviceStatus
+                from .database import CustomizedMobileConversationSession, DeepLearningFunctionStatus
                 with db_manager.get_session() as session:
                     # 세션 생성
                     cmc_session = CustomizedMobileConversationSession(
@@ -606,8 +606,8 @@ async def _start_customized_mobile_conversation(session_id: str, user_id: str, d
                     session.add(cmc_session)
                     
                     # YOLO 상태 저장
-                    yolo_status = IOTDeviceStatus(
-                        device_type='yolo',
+                    yolo_status = DeepLearningFunctionStatus(
+                        function_type='yolo',
                         session_id=session_id,
                         status='starting',
                         metadata={'user_id': user_id}
@@ -632,7 +632,7 @@ async def _start_customized_mobile_conversation(session_id: str, user_id: str, d
                 # 3. DB 상태 업데이트
                 if db_manager and db_manager._initialized:
                     try:
-                        from .database import CustomizedMobileConversationSession, IOTDeviceStatus
+                        from .database import CustomizedMobileConversationSession, DeepLearningFunctionStatus
                         with db_manager.get_session() as session:
                             # 세션 상태 업데이트
                             cmc_session = session.query(CustomizedMobileConversationSession).filter_by(session_id=session_id).first()
@@ -641,7 +641,7 @@ async def _start_customized_mobile_conversation(session_id: str, user_id: str, d
                                 cmc_session.status = 'yolo_running'
                             
                             # YOLO 상태 업데이트
-                            yolo_status = session.query(IOTDeviceStatus).filter_by(device_type='yolo', session_id=session_id).first()
+                            yolo_status = session.query(DeepLearningFunctionStatus).filter_by(function_type='yolo', session_id=session_id).first()
                             if yolo_status:
                                 yolo_status.status = 'active'
                                 yolo_status.last_updated = datetime.utcnow()
@@ -655,7 +655,8 @@ async def _start_customized_mobile_conversation(session_id: str, user_id: str, d
                     "success": True,
                     "status": "yolo_started",
                     "message": "YOLO 객체 인식 프로그램이 시작되었습니다. 맞춤형 이동식 대화를 시작할 수 있습니다.",
-                    "response": response_data
+                    "response": response_data,
+                    "next_action": "ask_walking_together"
                 }
             
             except httpx.TimeoutException:
@@ -711,10 +712,10 @@ async def _activate_tracking(session_id: str, db_manager) -> Dict[str, Any]:
         current_tracking_status = None
         if db_manager and db_manager._initialized:
             try:
-                from .database import IOTDeviceStatus
+                from .database import DeepLearningFunctionStatus
                 with db_manager.get_session() as session:
-                    tracking_status = session.query(IOTDeviceStatus).filter_by(
-                        device_type='tracking',
+                    tracking_status = session.query(DeepLearningFunctionStatus).filter_by(
+                        function_type='tracking',
                         session_id=session_id
                     ).first()
                     if tracking_status:
@@ -740,7 +741,7 @@ async def _activate_tracking(session_id: str, db_manager) -> Dict[str, Any]:
                 # 4. DB 상태 업데이트
                 if db_manager and db_manager._initialized:
                     try:
-                        from .database import CustomizedMobileConversationSession, IOTDeviceStatus
+                        from .database import CustomizedMobileConversationSession, DeepLearningFunctionStatus
                         with db_manager.get_session() as session:
                             # 세션 상태 업데이트
                             cmc_session = session.query(CustomizedMobileConversationSession).filter_by(session_id=session_id).first()
@@ -752,8 +753,8 @@ async def _activate_tracking(session_id: str, db_manager) -> Dict[str, Any]:
                                     cmc_session.tracking_deactivated_at = datetime.utcnow()
                             
                             # 추종 상태 저장/업데이트
-                            tracking_status = session.query(IOTDeviceStatus).filter_by(
-                                device_type='tracking',
+                            tracking_status = session.query(DeepLearningFunctionStatus).filter_by(
+                                function_type='tracking',
                                 session_id=session_id
                             ).first()
                             
@@ -762,8 +763,8 @@ async def _activate_tracking(session_id: str, db_manager) -> Dict[str, Any]:
                                 tracking_status.last_updated = datetime.utcnow()
                                 tracking_status.metadata = {'tracking_switch': tracking_switch}
                             else:
-                                tracking_status = IOTDeviceStatus(
-                                    device_type='tracking',
+                                tracking_status = DeepLearningFunctionStatus(
+                                    function_type='tracking',
                                     session_id=session_id,
                                     status='active' if is_activated else 'inactive',
                                     metadata={'tracking_switch': tracking_switch}
@@ -863,7 +864,7 @@ async def _end_customized_mobile_conversation(session_id: str, db_manager) -> Di
         # 3. DB 상태 업데이트
         if db_manager and db_manager._initialized:
             try:
-                from .database import CustomizedMobileConversationSession, IOTDeviceStatus
+                from .database import CustomizedMobileConversationSession, DeepLearningFunctionStatus
                 with db_manager.get_session() as session:
                     # 세션 종료 처리
                     cmc_session = session.query(CustomizedMobileConversationSession).filter_by(session_id=session_id).first()
@@ -875,7 +876,7 @@ async def _end_customized_mobile_conversation(session_id: str, db_manager) -> Di
                         cmc_session.status = 'ended'
                     
                     # YOLO 상태 업데이트
-                    yolo_status = session.query(IOTDeviceStatus).filter_by(device_type='yolo', session_id=session_id).first()
+                    yolo_status = session.query(DeepLearningFunctionStatus).filter_by(function_type='yolo', session_id=session_id).first()
                     if yolo_status:
                         yolo_status.status = 'inactive'
                         yolo_status.last_updated = datetime.utcnow()
@@ -907,6 +908,7 @@ async def _end_customized_mobile_conversation(session_id: str, db_manager) -> Di
 async def _generate_counseling_report(session_id: str, db_manager) -> Optional[Dict[str, Any]]:
     """
     심리 상담 리포트 자동 생성 (세션 종료 시)
+    대화 내용을 자동으로 분석하여 리포트에 포함합니다.
     
     Args:
         session_id: 대화 세션 ID
@@ -925,6 +927,7 @@ async def _generate_counseling_report(session_id: str, db_manager) -> Optional[D
             PsychologicalCounselingAnalysis,
             CounselingReport
         )
+        from .psychological_analysis import analyze_conversation_messages, save_psychological_analysis
         
         with db_manager.get_session() as session:
             # 세션 정보 조회
@@ -934,11 +937,23 @@ async def _generate_counseling_report(session_id: str, db_manager) -> Optional[D
                 return None
             
             # 대화 메시지 조회
-            messages = session.query(CustomizedMobileConversationMessage).filter_by(
+            db_messages = session.query(CustomizedMobileConversationMessage).filter_by(
                 session_id=session_id
             ).order_by(CustomizedMobileConversationMessage.message_order).all()
             
-            # 분석 결과 조회
+            # 메시지를 분석용 형식으로 변환
+            messages_for_analysis = [
+                {"role": msg.role, "content": msg.content}
+                for msg in db_messages
+            ]
+            
+            # 자동 분석 수행
+            analysis_result = analyze_conversation_messages(messages_for_analysis)
+            
+            # 분석 결과 저장
+            analysis_id = save_psychological_analysis(session_id, analysis_result, db_manager)
+            
+            # 기존 분석 결과 조회 (저장된 것 포함)
             analyses = session.query(PsychologicalCounselingAnalysis).filter_by(
                 session_id=session_id
             ).all()
@@ -950,7 +965,13 @@ async def _generate_counseling_report(session_id: str, db_manager) -> Optional[D
                 "started_at": cmc_session.started_at.isoformat() if cmc_session.started_at else None,
                 "ended_at": cmc_session.ended_at.isoformat() if cmc_session.ended_at else None,
                 "duration_minutes": None,
-                "message_count": len(messages),
+                "message_count": len(db_messages),
+                "psychological_analysis": {
+                    "overall_score": analysis_result.get("overall_score", 0),
+                    "overall_grade": analysis_result.get("overall_grade", "unknown"),
+                    "indicators": analysis_result.get("indicators", {}),
+                    "analyzed_at": analysis_result.get("analyzed_at")
+                },
                 "analyses": [
                     {
                         "type": a.analysis_type,
@@ -959,7 +980,8 @@ async def _generate_counseling_report(session_id: str, db_manager) -> Optional[D
                         "result": a.analysis_result
                     } for a in analyses
                 ],
-                "summary": f"맞춤형 이동식 대화 세션이 완료되었습니다. 총 {len(messages)}개의 메시지가 교환되었습니다."
+                "summary": f"맞춤형 이동식 대화 세션이 완료되었습니다. 총 {len(db_messages)}개의 메시지가 교환되었습니다. "
+                          f"심리 상담 분석 결과: 전체 점수 {analysis_result.get('overall_score', 0):.1f}점 ({analysis_result.get('overall_grade', 'unknown')} 등급)."
             }
             
             # 세션 지속 시간 계산
@@ -978,11 +1000,14 @@ async def _generate_counseling_report(session_id: str, db_manager) -> Optional[D
             session.add(report)
             session.commit()
             
-            logger.info(f"Generated counseling report: session_id={session_id}, report_id={report.id}")
+            logger.info(f"Generated counseling report with analysis: session_id={session_id}, report_id={report.id}, analysis_id={analysis_id}")
             return {
                 "success": True,
                 "report_id": report.id,
-                "session_id": session_id
+                "analysis_id": analysis_id,
+                "session_id": session_id,
+                "overall_score": analysis_result.get("overall_score", 0),
+                "overall_grade": analysis_result.get("overall_grade", "unknown")
             }
     
     except Exception as e:

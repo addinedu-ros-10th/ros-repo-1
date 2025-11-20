@@ -41,9 +41,10 @@ from .database import (
     CustomizedMobileConversationMessage,
     PsychologicalCounselingAnalysis,
     CounselingReport,
-    IOTDeviceStatus
+    DeepLearningFunctionStatus
 )
 from .tools import TOOLS, execute_function
+from .psychological_analysis import analyze_conversation_messages, save_psychological_analysis
 import time
 
 # 로깅 설정
@@ -350,7 +351,7 @@ async def text_chat(request: TextChatRequest):
     try:
         # 기본값 설정
         base_system_prompt = request.system_prompt or settings.default_system_prompt
-        # System Prompt에 Function Calling 사용 안내 추가
+        # System Prompt에 Function Calling 사용 안내 및 심리 상담 가이드라인 추가
         system_prompt = f"""{base_system_prompt}
 
 중요: 사용자가 데이터 조회나 API 호출을 요청하면 반드시 제공된 함수를 사용해야 합니다. 일반적인 응답으로 대체하지 마세요.
@@ -359,11 +360,22 @@ async def text_chat(request: TextChatRequest):
 1. get_users_list: 사용자가 "사용자 목록", "사용자 리스트", "사용자 목록 보여줘", "사용자 조회" 등을 요청할 때 사용
 2. get_user_profile: 사용자가 "사용자 프로필", "사용자 정보", "사용자 상세" 등을 요청할 때 사용 (user_id 필요)
 3. get_user_relationships: 사용자가 "사용자 관계", "관계 정보" 등을 요청할 때 사용 (user_id 필요)
+4. start_customized_mobile_conversation: 맞춤형 이동식 대화 시작 (YOLO 시작)
+5. activate_tracking: 추종 기능 활성화
+6. end_customized_mobile_conversation: 맞춤형 이동식 대화 종료
 
 규칙:
 - 사용자가 데이터 조회를 요청하면 반드시 해당 함수를 호출하세요
 - 함수를 사용할 수 있는 경우 일반적인 응답으로 대체하지 마세요
-- 함수 호출 결과를 받은 후 사용자에게 명확하게 전달하세요"""
+- 함수 호출 결과를 받은 후 사용자에게 명확하게 전달하세요
+
+심리 상담 가이드라인 (어르신 대상):
+- 인지행동치료(CBT) 원칙: 부정적 사고 패턴을 인식하고 긍정적으로 전환하도록 돕습니다
+- 공감적 경청: 어르신의 감정을 깊이 이해하고 공감하며, 판단하지 않습니다
+- 긍정 심리학: 강점과 긍정적 경험에 초점을 맞춰 정서적 웰빙을 향상시킵니다
+- 감정 표현 촉진: 어르신이 자신의 감정을 자유롭게 표현할 수 있도록 안전한 환경을 제공합니다
+- 우울/불안/고립감 지표 모니터링: 대화 중 우울, 불안, 고립감의 징후를 주의 깊게 관찰하고 적절히 대응합니다
+- 건강 상태 관심: 신체적 건강과 수면 패턴에 대한 관심을 표현하고 필요시 전문가 상담을 권장합니다"""
         model = request.model.value if request.model else settings.default_chat_model
         
         # 세션 히스토리 가져오기 또는 생성

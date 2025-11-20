@@ -237,12 +237,12 @@ class CounselingReport(Base):
     )
 
 
-class IOTDeviceStatus(Base):
-    """IOT 장치 상태 관리 테이블"""
-    __tablename__ = "iot_device_status"
+class DeepLearningFunctionStatus(Base):
+    """딥러닝 기능 상태 관리 테이블 (YOLO 객체 인식, 추종 제어 등)"""
+    __tablename__ = "deep_learning_function_status"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    device_type = Column(String(50), nullable=False, index=True)  # yolo, tracking
+    function_type = Column(String(50), nullable=False, index=True)  # yolo, tracking
     session_id = Column(String(255), nullable=True, index=True)
     status = Column(String(50), nullable=False)  # active, inactive, starting, stopping, error
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -250,8 +250,8 @@ class IOTDeviceStatus(Base):
     
     # 인덱스
     __table_args__ = (
-        Index('idx_ids_device_status', 'device_type', 'status'),
-        Index('idx_ids_session', 'session_id'),
+        Index('idx_dlfs_function_status', 'function_type', 'status'),
+        Index('idx_dlfs_session', 'session_id'),
     )
 
 
@@ -864,6 +864,21 @@ class DatabaseManager:
                 text("CREATE INDEX IF NOT EXISTS idx_system_prompt_id ON system_prompt_usage(system_prompt_id)"),
                 text("CREATE INDEX IF NOT EXISTS idx_user_session ON system_prompt_usage(user_id, session_id)"),
                 text("CREATE INDEX IF NOT EXISTS idx_prompt_usage_created ON system_prompt_usage(created_at)")
+            ],
+            'deep_learning_function_status': [
+                text("""
+                    CREATE TABLE IF NOT EXISTS deep_learning_function_status (
+                        id SERIAL PRIMARY KEY,
+                        function_type VARCHAR(50) NOT NULL,
+                        session_id VARCHAR(255),
+                        status VARCHAR(50) NOT NULL,
+                        last_updated TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        metadata JSONB
+                    )
+                """),
+                text("CREATE INDEX IF NOT EXISTS idx_dlfs_function_type ON deep_learning_function_status(function_type)"),
+                text("CREATE INDEX IF NOT EXISTS idx_dlfs_function_status ON deep_learning_function_status(function_type, status)"),
+                text("CREATE INDEX IF NOT EXISTS idx_dlfs_session ON deep_learning_function_status(session_id)")
             ]
         }
         
