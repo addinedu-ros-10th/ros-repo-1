@@ -610,7 +610,7 @@ async def _start_customized_mobile_conversation(session_id: str, user_id: str, d
                         function_type='yolo',
                         session_id=session_id,
                         status='starting',
-                        metadata={'user_id': user_id}
+                        meta_data={'user_id': user_id}
                     )
                     session.add(yolo_status)
                     session.commit()
@@ -761,13 +761,13 @@ async def _activate_tracking(session_id: str, db_manager) -> Dict[str, Any]:
                             if tracking_status:
                                 tracking_status.status = 'active' if is_activated else 'inactive'
                                 tracking_status.last_updated = datetime.utcnow()
-                                tracking_status.metadata = {'tracking_switch': tracking_switch}
+                                tracking_status.meta_data = {'tracking_switch': tracking_switch}
                             else:
                                 tracking_status = DeepLearningFunctionStatus(
                                     function_type='tracking',
                                     session_id=session_id,
                                     status='active' if is_activated else 'inactive',
-                                    metadata={'tracking_switch': tracking_switch}
+                                    meta_data={'tracking_switch': tracking_switch}
                                 )
                                 session.add(tracking_status)
                             

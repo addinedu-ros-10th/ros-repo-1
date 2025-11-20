@@ -246,7 +246,7 @@ class DeepLearningFunctionStatus(Base):
     session_id = Column(String(255), nullable=True, index=True)
     status = Column(String(50), nullable=False)  # active, inactive, starting, stopping, error
     last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    metadata = Column(JSON, nullable=True)  # 추가 메타데이터 (JSON)
+    meta_data = Column(JSON, nullable=True)  # 추가 메타데이터 (JSON) - metadata는 SQLAlchemy 예약어이므로 meta_data 사용
     
     # 인덱스
     __table_args__ = (
