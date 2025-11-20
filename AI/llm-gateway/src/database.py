@@ -6,7 +6,7 @@
 
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from sqlalchemy import create_engine, Column, String, Text, DateTime, Integer, Float, JSON, Index, text, Boolean
+from sqlalchemy import create_engine, Column, String, Text, DateTime, Integer, Float, JSON, Index, text, Boolean, func
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
