@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     """서버 설정 클래스"""
     
     # OpenAI API 설정
-    openai_api_key: str = Field(..., description="OpenAI API 키")
+    openai_api_key: Optional[str] = Field(default=None, description="OpenAI API 키")
     
     # 서버 설정
     server_host: str = Field(default="0.0.0.0", description="서버 호스트")
@@ -51,9 +51,10 @@ class Settings(BaseSettings):
     redis_password: Optional[str] = Field(default=None, description="Redis 비밀번호")
     
     class Config:
-        env_file = ".env,local"
+        env_file = [".env", ".env.local"]  # .env와 .env.local 파일을 순차적으로 로드
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "ignore"  # 정의되지 않은 환경변수는 무시 (Docker Compose 전용 변수 등)
 
 
 # 전역 설정 인스턴스

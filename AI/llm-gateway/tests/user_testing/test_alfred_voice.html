@@ -1,0 +1,2318 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alfred 음성 인터페이스 테스트</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 900px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .status-bar {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .status-bar.waiting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-bar.listening {
+            background: #d1ecf1;
+            color: #0c5460;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status-bar.processing {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-bar.playing {
+            background: #e7f3ff;
+            color: #004085;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .keyword-indicator {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .keyword-indicator.active {
+            background: #d4edda;
+            border: 2px solid #28a745;
+        }
+        
+        .keyword-indicator span {
+            font-size: 18px;
+            font-weight: bold;
+            color: #28a745;
+        }
+        
+        .similarity-badge {
+            display: inline-block;
+            margin-left: 10px;
+            padding: 4px 8px;
+            background: #007bff;
+            color: white;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: normal;
+        }
+        
+        .voiceprint-status {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .voiceprint-status.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        
+        .voiceprint-status.error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        
+        .voiceprint-stats {
+            background: #f8f9fa;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .conversation {
+            max-height: 400px;
+            overflow-y: auto;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .message {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message.user {
+            background: #e3f2fd;
+            text-align: right;
+        }
+        
+        .message.assistant {
+            background: #f1f8e9;
+        }
+        
+        .message-header {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .message-text {
+            line-height: 1.6;
+            font-size: 16px;
+        }
+        
+        .message-text.highlight {
+            background: #fff9c4;
+            padding: 2px 4px;
+            border-radius: 3px;
+            transition: all 0.1s;
+        }
+        
+        .controls {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        button {
+            padding: 12px 30px;
+            margin: 5px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-start {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-stop {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-reset {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        
+        .info-box h3 {
+            margin-bottom: 10px;
+            color: #004085;
+        }
+        
+        .info-box ul {
+            margin-left: 20px;
+            color: #004085;
+        }
+        
+        .info-box li {
+            margin: 5px 0;
+        }
+        
+        .recording-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #dc3545;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .settings-panel {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .settings-panel h3 {
+            margin-bottom: 15px;
+            color: #333;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .settings-panel h3:hover {
+            color: #007bff;
+        }
+        
+        .settings-content {
+            display: none;
+        }
+        
+        .settings-content.active {
+            display: block;
+        }
+        
+        .setting-item {
+            margin-bottom: 15px;
+        }
+        
+        .setting-item label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .setting-item input[type="number"] {
+            width: 100px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .setting-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .setting-item .unit {
+            color: #666;
+            margin-left: 5px;
+        }
+        
+        .setting-item .description {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+        
+        .debug-panel {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .debug-panel h3 {
+            margin-bottom: 15px;
+            color: #856404;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .debug-panel h3:hover {
+            color: #ffc107;
+        }
+        
+        .debug-content {
+            display: none;
+        }
+        
+        .debug-content.active {
+            display: block;
+        }
+        
+        .debug-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        
+        .debug-section h4 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .debug-section select,
+        .debug-section input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .voiceprint-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            background: #f8f9fa;
+        }
+        
+        .voiceprint-item {
+            padding: 8px;
+            margin: 5px 0;
+            border-radius: 5px;
+            background: white;
+            border: 1px solid #ddd;
+            font-size: 12px;
+        }
+        
+        .voiceprint-item.matched {
+            background: #d4edda;
+            border-color: #28a745;
+            border-width: 2px;
+        }
+        
+        .voiceprint-item.matched::before {
+            content: "✓ ";
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .stt-display {
+            min-height: 60px;
+            padding: 10px;
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .stt-interim {
+            color: #666;
+            font-style: italic;
+        }
+        
+        .stt-final {
+            color: #333;
+            font-weight: normal;
+        }
+        
+        .match-info {
+            padding: 10px;
+            background: #e7f3ff;
+            border: 1px solid #007bff;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        
+        .match-info.active {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        
+        .similarity-display {
+            font-size: 16px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .similarity-display.high {
+            color: #28a745;
+        }
+        
+        .similarity-display.medium {
+            color: #ffc107;
+        }
+        
+        .similarity-display.low {
+            color: #dc3545;
+        }
+        
+        .audio-level-meter {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        .audio-level-meter h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .level-display {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .level-bar-container {
+            flex: 1;
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .level-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745 0%, #ffc107 50%, #dc3545 100%);
+            width: 0%;
+            transition: width 0.1s linear;
+            border-radius: 15px;
+        }
+        
+        .level-value {
+            min-width: 60px;
+            text-align: right;
+            font-weight: bold;
+            font-size: 18px;
+            color: #333;
+        }
+        
+        .level-value.silent {
+            color: #999;
+        }
+        
+        .level-value.low {
+            color: #28a745;
+        }
+        
+        .level-value.medium {
+            color: #ffc107;
+        }
+        
+        .level-value.high {
+            color: #dc3545;
+        }
+        
+        .level-indicators {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 10px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Alfred 음성 인터페이스</h1>
+        <p class="subtitle">키워드 "alfred"를 말하면 대화가 시작됩니다</p>
+        
+        <div class="status-bar waiting" id="statusBar">
+            대기 중... "alfred"라고 말해주세요
+        </div>
+        
+        <div class="keyword-indicator" id="keywordIndicator">
+            키워드 감지: <span id="keywordStatus">대기 중</span>
+            <span class="similarity-badge" id="similarityBadge" style="display: none;"></span>
+        </div>
+        
+        <div class="voiceprint-stats" id="voiceprintStats" style="display: none;">
+            등록된 음성 지문: <span id="voiceprintCount">0</span>개
+        </div>
+        
+        <div class="voiceprint-status" id="voiceprintStatus" style="display: none;"></div>
+        
+        <div class="audio-level-meter">
+            <h3>🎤 음성 입력 레벨</h3>
+            <div class="level-display">
+                <div class="level-bar-container">
+                    <div class="level-bar" id="levelBar"></div>
+                </div>
+                <div class="level-value silent" id="levelValue">-∞ dB</div>
+            </div>
+            <div class="level-indicators">
+                <span>조용함</span>
+                <span>보통</span>
+                <span>크게</span>
+            </div>
+        </div>
+        
+        <div class="settings-panel">
+            <h3 onclick="toggleSettings()">⚙️ 설정</h3>
+            <div class="settings-content" id="settingsContent">
+                <div class="setting-item">
+                    <label for="recordingDuration">자동 녹음 중지 시간:</label>
+                    <input type="number" id="recordingDuration" min="1" max="30" value="5" step="1">
+                    <span class="unit">초</span>
+                    <div class="description">녹음 시작 후 자동으로 중지되는 시간 (1-30초)</div>
+                </div>
+                
+                <div class="setting-item">
+                    <label for="keywordWaitTime">키워드 감지 후 대기 시간:</label>
+                    <input type="number" id="keywordWaitTime" min="0" max="5" value="0.5" step="0.1">
+                    <span class="unit">초</span>
+                    <div class="description">키워드 감지 후 녹음 시작까지 대기 시간 (0-5초)</div>
+                </div>
+                
+                <div class="setting-item">
+                    <label for="autoWaitMode">
+                        <input type="checkbox" id="autoWaitMode" checked>
+                        오디오 재생 완료 후 자동 대기 모드
+                    </label>
+                    <div class="description">체크 시 오디오 재생 완료 후 자동으로 다음 입력 대기</div>
+                </div>
+                
+                <div class="setting-item">
+                    <label for="activationDuration">활성화 유지 시간:</label>
+                    <input type="number" id="activationDuration" min="1" max="60" value="5" step="1">
+                    <span class="unit">분</span>
+                    <div class="description">키워드 감지 후 활성화 상태가 유지되는 시간 (1-60분)</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="activation-timer" id="activationTimer" style="display: none; background: #e7f3ff; padding: 10px; border-radius: 10px; margin: 10px 0; text-align: center;">
+            <span id="timerText">활성화 상태: <strong id="timerValue">5:00</strong> 남음</span>
+            <span id="warningText" style="display: none; color: #dc3545; font-weight: bold; margin-left: 10px;"></span>
+        </div>
+        
+        <!-- 개발용 디버깅 패널 -->
+        <div class="debug-panel">
+            <h3 onclick="toggleDebugPanel()">🔧 개발자 디버깅 패널</h3>
+            <div class="debug-content" id="debugContent">
+                <!-- STT 모델 선택 -->
+                <div class="debug-section">
+                    <h4>1. STT 모델 선택</h4>
+                    <select id="sttModelSelect" onchange="onSTTModelChange()">
+                        <option value="browser" selected>브라우저 STT (기본)</option>
+                        <option value="whisper">OpenAI Whisper</option>
+                    </select>
+                    <div class="description" style="font-size: 12px; color: #666;">
+                        브라우저 STT: 실시간 키워드 감지용<br>
+                        OpenAI Whisper: 고정밀 STT (녹음 후 처리)
+                    </div>
+                </div>
+                
+                <!-- 키워드 선택 -->
+                <div class="debug-section">
+                    <h4>2. 매칭 대상 키워드 선택</h4>
+                    <select id="keywordSelect" onchange="onKeywordChange()">
+                        <option value="alfred" selected>alfred (기본)</option>
+                    </select>
+                    <button onclick="loadKeywords()" style="margin-top: 5px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">키워드 목록 새로고침</button>
+                </div>
+                
+                <!-- 음성 지문 목록 -->
+                <div class="debug-section">
+                    <h4>3. 음성 지문 목록 (<span id="voiceprintListCount">0</span>개)</h4>
+                    <div class="voiceprint-list" id="voiceprintList">
+                        <div style="text-align: center; color: #666; padding: 20px;">로딩 중...</div>
+                    </div>
+                    <button onclick="loadVoiceprints()" style="margin-top: 10px; padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">목록 새로고침</button>
+                </div>
+                
+                <!-- STT 결과 실시간 표시 -->
+                <div class="debug-section">
+                    <h4>4. STT 결과 실시간 표시</h4>
+                    <div class="stt-display" id="sttDisplay">
+                        <div class="stt-interim" id="sttInterim">인식 중인 텍스트가 여기에 표시됩니다...</div>
+                        <div class="stt-final" id="sttFinal">최종 인식된 텍스트가 여기에 표시됩니다...</div>
+                    </div>
+                </div>
+                
+                <!-- 매칭 정보 -->
+                <div class="debug-section">
+                    <h4>5. 키워드 매칭 정보</h4>
+                    <div class="match-info" id="matchInfo">
+                        <div>매칭 상태: <span id="matchStatus">대기 중</span></div>
+                        <div style="margin-top: 5px;">매칭된 키워드: <span id="matchedKeyword">-</span></div>
+                        <div style="margin-top: 5px;">매칭된 음성 지문 ID: <span id="matchedVoiceprintId">-</span></div>
+                    </div>
+                </div>
+                
+                <!-- 유사도 표시 -->
+                <div class="debug-section">
+                    <h4>6. 유사도 정보</h4>
+                    <div>
+                        <div>STT 결과: <span id="debugSTTResult">-</span></div>
+                        <div style="margin-top: 5px;">기준 키워드: <span id="debugBaseKeyword">alfred</span></div>
+                        <div style="margin-top: 5px;">유사도: <span class="similarity-display" id="debugSimilarity">-</span></div>
+                        <div style="margin-top: 5px; font-size: 12px; color: #666;">
+                            유사도 기준: 0.7 이상 = 높음 (녹색), 0.5-0.7 = 중간 (노란색), 0.5 미만 = 낮음 (빨간색)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 사용자 및 세션 관리 패널 -->
+        <div class="session-panel" style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+            <h4 style="margin-bottom: 10px; color: #333;">👤 사용자 및 세션 관리</h4>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+                <div>
+                    <label style="font-size: 12px; color: #666;">USER ID:</label>
+                    <input type="text" id="userIdInput" style="padding: 5px 10px; border: 1px solid #ddd; border-radius: 5px; width: 150px;" placeholder="자동 생성" onchange="onUserIdChange()" onblur="onUserIdChange()">
+                    <button onclick="generateUserId()" style="padding: 5px 10px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 5px;">생성</button>
+                </div>
+                <div>
+                    <label style="font-size: 12px; color: #666;">Session ID:</label>
+                    <select id="sessionIdSelect" style="padding: 5px 10px; border: 1px solid #ddd; border-radius: 5px; width: 200px;" onchange="onSessionIdChange()">
+                        <option value="">새 세션 생성</option>
+                    </select>
+                    <button onclick="createNewSession()" style="padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 5px;">신규</button>
+                </div>
+                <div>
+                    <button onclick="loadSessionHistory()" style="padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">세션 히스토리 로드</button>
+                </div>
+            </div>
+            <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                <strong>현재:</strong> USER ID: <span id="currentUserId">-</span> | Session ID: <span id="currentSessionId">-</span>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn-start" id="startBtn" onclick="startListening()">🎤 시작</button>
+            <button class="btn-stop" id="stopBtn" onclick="stopListening()" disabled>⏹️ 중지</button>
+            <button class="btn-reset" onclick="resetConversation()">🔄 대화 초기화</button>
+            <button class="btn-info" onclick="downloadConversation()" style="background: #17a2b8; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">💾 대화 다운로드</button>
+            <button class="btn-info" onclick="downloadKeywordAttempts()" style="background: #ffc107; color: #333; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">📋 키워드 시도 목록 다운로드</button>
+        </div>
+        
+        <div class="conversation" id="conversation"></div>
+        
+        <div class="info-box">
+            <h3>사용 방법</h3>
+            <ul>
+                <li>1. "시작" 버튼을 클릭하여 마이크 접근 권한을 허용합니다</li>
+                <li>2. "alfred"라고 영어로 말하면 키워드가 감지됩니다</li>
+                <li>3. 키워드 감지 후 한국어로 질문을 말하세요</li>
+                <li>4. AI 응답이 텍스트와 음성으로 표시됩니다</li>
+                <li>5. 음성 재생 중 텍스트가 하이라이트됩니다</li>
+            </ul>
+            <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                <strong>참고:</strong> Chrome 또는 Edge 브라우저에서 최적의 성능을 제공합니다.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8001';
+        let KEYWORD = 'alfred'; // 동적으로 변경 가능하도록 let으로 변경
+        
+        let recognition = null;
+        let isListening = false;
+        let sessionActive = false;
+        let currentAudio = null;
+        let conversationHistory = []; // 현재 세션의 대화 히스토리
+        let lastDetectedKeyword = null; // 마지막 감지된 키워드 STT 결과 저장
+        let keywordAudioBuffer = null; // 키워드 감지 시점의 오디오 버퍼
+        let voiceprintCount = 0; // 등록된 음성 지문 개수
+        
+        // 디버깅 관련 변수
+        let currentSTTModel = 'browser'; // 'browser' or 'whisper'
+        let voiceprints = []; // 현재 키워드의 음성 지문 목록
+        let matchedVoiceprintId = null; // 매칭된 음성 지문 ID
+        
+        // 사용자 및 세션 관리 변수
+        let userId = null; // 현재 사용자 ID
+        let sessionId = 'alfred_' + Date.now(); // 현재 세션 ID (기존 변수 재사용)
+        let keywordAttempts = []; // 키워드 시도 목록 [{timestamp, stt_result, matched, similarity, base_keyword}]
+        let userSessions = {}; // USER ID별 Session ID 목록 {userId: [sessionId1, sessionId2, ...]}
+        let sessionHistories = {}; // Session ID별 대화 히스토리 {sessionId: [{role, text, timestamp}]}
+        
+        // 활성화 시간 관리
+        let activationTimer = null; // 활성화 유지 타이머
+        let activationStartTime = null; // 활성화 시작 시간
+        let activationDuration = 5 * 60 * 1000; // 기본 5분 (밀리초)
+        let warningShown = false; // 경고 메시지 표시 여부
+        
+        // 설정 파라미터
+        function getSettings() {
+            return {
+                recordingDuration: parseFloat(document.getElementById('recordingDuration').value) * 1000, // 밀리초
+                keywordWaitTime: parseFloat(document.getElementById('keywordWaitTime').value) * 1000, // 밀리초
+                autoWaitMode: document.getElementById('autoWaitMode').checked,
+                activationDuration: parseFloat(document.getElementById('activationDuration').value) * 60 * 1000 // 분을 밀리초로 변환
+            };
+        }
+        
+        // 설정 패널 토글
+        function toggleSettings() {
+            const content = document.getElementById('settingsContent');
+            content.classList.toggle('active');
+        }
+        
+        // Web Speech API 지원 확인
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+            alert('이 브라우저는 Web Speech API를 지원하지 않습니다. Chrome 또는 Edge를 사용해주세요.');
+        }
+        
+        // SpeechRecognition 초기화
+        function initSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) return null;
+            
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US'; // 영어로 키워드 감지
+            
+            recognition.onstart = () => {
+                console.log('음성 인식 시작');
+                isListening = true;
+                updateStatus('listening', '듣는 중... "alfred"를 말해주세요');
+            };
+            
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+                
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript.toLowerCase().trim();
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript + ' ';
+                    }
+                }
+                
+                // 디버깅: STT 결과 실시간 표시
+                updateSTTDisplay(interimTranscript.trim(), finalTranscript.trim());
+                
+                // 키워드 감지: 서버 API를 통해 확인
+                const fullText = (interimTranscript + ' ' + finalTranscript).toLowerCase().trim();
+                
+                // 키워드가 포함되어 있는지 기본 확인 (서버 호출 전 필터링)
+                const keywordRegex = new RegExp(`\\b${KEYWORD}\\b`, 'i');
+                const keywordMatch = keywordRegex.test(fullText);
+                const keywordIncluded = fullText.includes(KEYWORD);
+                
+                // 키워드가 감지되었을 때
+                if (keywordMatch || keywordIncluded) {
+                    if (!sessionActive && isListening) {
+                        // 세션이 비활성화 상태일 때만 키워드 확인
+                        console.log('🔍 키워드 후보 감지:', fullText);
+                        console.log('🎯 현재 선택된 키워드:', KEYWORD);
+                        console.log('📝 STT 결과:', fullText);
+                        // 키워드 시도 기록
+                        recordKeywordAttempt(fullText, KEYWORD, false, 0);
+                        checkKeywordWithServer(fullText);
+                    } else if (sessionActive) {
+                        // 활성화 상태일 때는 키워드를 무시하고 연속 대화 가능
+                        // (키워드 감지는 비활성화 상태에서만 동작)
+                        console.log('✅ 세션 활성화 상태 - 키워드 무시');
+                    }
+                } else {
+                    // 키워드가 포함되지 않은 경우에도 등록된 모든 키워드와 비교 시도
+                    // (다른 키워드가 선택되어 있을 수 있음)
+                    if (!sessionActive && isListening && finalTranscript.trim()) {
+                        // 최종 결과만 서버에서 확인 (너무 많은 요청 방지)
+                        console.log('🔍 키워드 미감지, 서버에서 확인 시도:', finalTranscript.trim());
+                        checkKeywordWithServer(finalTranscript.trim());
+                    }
+                }
+            };
+            
+            recognition.onerror = (event) => {
+                console.error('음성 인식 오류:', event.error);
+                
+                // aborted 오류는 무시 (이미 중지된 recognition을 다시 시작하려고 할 때 발생)
+                if (event.error === 'aborted') {
+                    console.log('⚠️ STT aborted: recognition이 이미 중지되었습니다. 무시합니다.');
+                    return;
+                }
+                
+                if (event.error === 'no-speech') {
+                    // 음성이 없어도 계속 듣기
+                    return;
+                }
+                
+                // 네트워크 오류나 서비스 오류는 재시도
+                if (event.error === 'network' || event.error === 'service-not-allowed') {
+                    console.log('⚠️ 네트워크/서비스 오류, 재시도합니다.');
+                    if (isListening && !sessionActive) {
+                        setTimeout(() => {
+                            try {
+                                if (isListening && !sessionActive && recognition) {
+                                    recognition.start();
+                                }
+                            } catch (e) {
+                                console.log('재시작 실패:', e);
+                            }
+                        }, 1000);
+                    }
+                    return;
+                }
+                
+                updateStatus('waiting', `오류 발생: ${event.error}. 다시 시도해주세요.`);
+            };
+            
+            recognition.onend = () => {
+                console.log('음성 인식 종료');
+                if (isListening && !sessionActive) {
+                    // 자동 재시작 (연속 감지) - 세션이 활성화되지 않았을 때만
+                    setTimeout(() => {
+                        try {
+                            // recognition이 여전히 존재하고, 실행 중이 아닐 때만 재시작
+                            if (isListening && !sessionActive && recognition) {
+                                // recognition 상태 확인 (aborted 오류 방지)
+                                // Chrome/Edge에서는 recognition 객체에 상태를 직접 확인할 수 없으므로
+                                // try-catch로 처리
+                                recognition.start();
+                            }
+                        } catch (e) {
+                            // aborted 오류는 무시 (이미 중지된 recognition)
+                            if (e.name === 'InvalidStateError' || e.message?.includes('aborted')) {
+                                console.log('⚠️ recognition이 이미 중지되었습니다. 무시합니다.');
+                                return;
+                            }
+                            console.log('재시작 실패:', e);
+                            // 재시작 실패 시 다시 시도 (aborted 오류가 아닌 경우만)
+                            if (isListening && !sessionActive && recognition) {
+                                setTimeout(() => {
+                                    try {
+                                        if (isListening && !sessionActive && recognition) {
+                                            recognition.start();
+                                        }
+                                    } catch (e2) {
+                                        // aborted 오류는 무시
+                                        if (e2.name === 'InvalidStateError' || e2.message?.includes('aborted')) {
+                                            console.log('⚠️ recognition이 이미 중지되었습니다. 무시합니다.');
+                                            return;
+                                        }
+                                        console.log('재시작 재시도 실패:', e2);
+                                    }
+                                }, 1000);
+                            }
+                        }
+                    }, 100);
+                }
+            };
+            
+            return recognition;
+        }
+        
+        // 서버에서 키워드 확인 및 활성화 처리
+        async function checkKeywordWithServer(sttResult) {
+            if (sessionActive) {
+                // 이미 세션이 활성화되어 있으면 무시
+                console.log('⏭️ 세션 활성화 상태 - 키워드 체크 스킵');
+                return;
+            }
+            
+            try {
+                console.log('📡 키워드 확인 요청:', {
+                    stt_result: sttResult,
+                    base_keyword: KEYWORD,
+                    session_id: sessionId
+                });
+                
+                // 키워드 확인 요청
+                const response = await fetch(`${API_BASE_URL}/api/keyword/check`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        stt_result: sttResult,
+                        base_keyword: KEYWORD,
+                        session_id: sessionId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                console.log('📥 키워드 확인 응답:', data);
+                
+                // 디버깅: 유사도 정보 업데이트
+                updateSimilarityInfo(sttResult, KEYWORD, data.similarity || 0);
+                
+                if (data.is_keyword && data.activate) {
+                    console.log('✅ 키워드 확인됨:', data.matched_keyword, '유사도:', data.similarity);
+                    
+                    // 키워드 시도 기록 (성공)
+                    recordKeywordAttempt(sttResult, KEYWORD, true, data.similarity || 1.0);
+                    
+                    // 마지막 감지된 키워드 저장
+                    lastDetectedKeyword = {
+                        stt_result: sttResult,
+                        matched_keyword: data.matched_keyword,
+                        voiceprint_id: data.voiceprint_id,
+                        similarity: data.similarity || 1.0
+                    };
+                    
+                    // 유사도 표시
+                    showSimilarity(data.similarity || 1.0);
+                    
+                    // 디버깅: 매칭 정보 업데이트
+                    updateMatchInfo(true, data.matched_keyword, data.voiceprint_id, data.similarity || 1.0);
+                    
+                    // 키워드 활성화 처리
+                    activateKeyword(data.matched_keyword, sttResult, data.voiceprint_id);
+                    
+                    // 음성 지문이 없으면 등록 (키워드 감지 시점의 오디오는 별도 녹음 필요)
+                    // 현재 구조에서는 키워드 감지 후 첫 질문 녹음 시 음성 지문 등록
+                } else {
+                    console.log('❌ 키워드 매칭 실패:', {
+                        stt_result: sttResult,
+                        base_keyword: KEYWORD,
+                        similarity: data.similarity || 0,
+                        is_keyword: data.is_keyword,
+                        activate: data.activate
+                    });
+                    // 키워드 시도 기록 (실패)
+                    recordKeywordAttempt(sttResult, KEYWORD, false, data.similarity || 0);
+                    lastDetectedKeyword = null;
+                    hideSimilarity();
+                    
+                    // 디버깅: 매칭 실패 정보 업데이트
+                    updateMatchInfo(false, null, null, data.similarity || 0);
+                    
+                    // 유사도가 낮은 경우 다른 키워드일 가능성 안내
+                    if (data.similarity && data.similarity < 0.7) {
+                        console.log('💡 팁: 다른 키워드를 선택해보세요. 현재 선택된 키워드:', KEYWORD);
+                    }
+                }
+            } catch (error) {
+                console.error('키워드 확인 오류:', error);
+                // 디버깅: 에러 정보 업데이트
+                updateMatchInfo(false, null, null, 0);
+                updateSimilarityInfo(sttResult, KEYWORD, 0);
+                
+                // 서버 오류 시 기본 키워드 매칭으로 폴백
+                if (sttResult.includes(KEYWORD)) {
+                    activateKeyword(KEYWORD, sttResult);
+                    updateMatchInfo(true, KEYWORD, null, 1.0);
+                }
+            }
+        }
+        
+        // 유사도 표시
+        function showSimilarity(similarity) {
+            const badge = document.getElementById('similarityBadge');
+            const percentage = Math.round(similarity * 100);
+            badge.textContent = `유사도 ${percentage}%`;
+            badge.style.display = 'inline-block';
+            
+            // 유사도에 따른 색상 변경
+            if (similarity >= 0.9) {
+                badge.style.background = '#28a745';
+            } else if (similarity >= 0.7) {
+                badge.style.background = '#ffc107';
+                badge.style.color = '#000';
+            } else {
+                badge.style.background = '#dc3545';
+            }
+        }
+        
+        function hideSimilarity() {
+            document.getElementById('similarityBadge').style.display = 'none';
+        }
+        
+        // 음성 지문 상태 표시
+        function showVoiceprintStatus(message, isSuccess = true) {
+            const statusDiv = document.getElementById('voiceprintStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = `voiceprint-status ${isSuccess ? 'success' : 'error'}`;
+            statusDiv.style.display = 'block';
+            
+            // 5초 후 자동 숨김
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        // 음성 지문 개수 업데이트
+        async function updateVoiceprintCount() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/keyword/voiceprint?base_keyword=${KEYWORD}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.voiceprints) {
+                        voiceprintCount = data.voiceprints.length;
+                        const countDiv = document.getElementById('voiceprintCount');
+                        const statsDiv = document.getElementById('voiceprintStats');
+                        countDiv.textContent = voiceprintCount;
+                        if (voiceprintCount > 0) {
+                            statsDiv.style.display = 'block';
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('음성 지문 개수 조회 실패:', error);
+            }
+        }
+        
+        // 활성화 타이머 시작
+        function startActivationTimer() {
+            const settings = getSettings();
+            activationDuration = settings.activationDuration;
+            activationStartTime = Date.now();
+            warningShown = false;
+            
+            // 타이머 표시
+            const timerDiv = document.getElementById('activationTimer');
+            timerDiv.style.display = 'block';
+            
+            // 타이머 업데이트
+            updateActivationTimer();
+            
+            // 1초마다 타이머 업데이트
+            if (activationTimer) {
+                clearInterval(activationTimer);
+            }
+            activationTimer = setInterval(() => {
+                updateActivationTimer();
+            }, 1000);
+        }
+        
+        // 활성화 타이머 업데이트
+        function updateActivationTimer() {
+            if (!activationStartTime || !sessionActive) {
+                return;
+            }
+            
+            const elapsed = Date.now() - activationStartTime;
+            const remaining = activationDuration - elapsed;
+            
+            if (remaining <= 0) {
+                // 활성화 시간 종료
+                clearActivationTimer();
+                deactivateSession();
+                return;
+            }
+            
+            // 남은 시간 표시
+            const minutes = Math.floor(remaining / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
+            const timerValue = document.getElementById('timerValue');
+            if (timerValue) {
+                timerValue.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            // 경고 시간 (활성화 시간의 80%)
+            const warningTime = activationDuration * 0.8;
+            if (elapsed >= warningTime && !warningShown) {
+                warningShown = true;
+                const warningSeconds = Math.ceil(remaining / 1000);
+                showWarningMessage(warningSeconds);
+            }
+        }
+        
+        // 경고 메시지 표시
+        function showWarningMessage(seconds) {
+            const warningText = document.getElementById('warningText');
+            if (warningText) {
+                warningText.textContent = `⚠️ ${seconds}초 후에 알프레드 음성 대화가 비활성화 됩니다`;
+                warningText.style.display = 'inline';
+            }
+        }
+        
+        // 활성화 타이머 정리
+        function clearActivationTimer() {
+            if (activationTimer) {
+                clearInterval(activationTimer);
+                activationTimer = null;
+            }
+            activationStartTime = null;
+            warningShown = false;
+            
+            const timerDiv = document.getElementById('activationTimer');
+            if (timerDiv) {
+                timerDiv.style.display = 'none';
+            }
+            
+            const warningText = document.getElementById('warningText');
+            if (warningText) {
+                warningText.style.display = 'none';
+            }
+        }
+        
+        // 세션 비활성화
+        function deactivateSession() {
+            sessionActive = false;
+            document.getElementById('keywordStatus').textContent = '대기 중';
+            document.getElementById('keywordIndicator').classList.remove('active');
+            hideSimilarity();
+            updateStatus('waiting', '활성화를 위해 "alfred"라고 말해주세요');
+            
+            // 키워드 감지를 다시 활성화
+            if (recognition && isListening) {
+                setTimeout(() => {
+                    try {
+                        if (isListening && !sessionActive && recognition) {
+                            if (recognition.state === 'stopped' || recognition.state === 'inactive') {
+                                recognition.start();
+                                console.log('비활성화 후 키워드 감지 재시작');
+                            }
+                        }
+                    } catch (e) {
+                        console.log('비활성화 후 recognition 재시작 실패:', e);
+                    }
+                }, 500);
+            }
+        }
+        
+        // 키워드 활성화 처리
+        function activateKeyword(matchedKeyword, sttResult, voiceprintId = null) {
+            if (sessionActive) {
+                // 이미 활성화되어 있으면 타이머만 리셋
+                startActivationTimer();
+                return;
+            }
+            
+            sessionActive = true;
+            document.getElementById('keywordStatus').textContent = '감지됨! 질문을 말하세요';
+            document.getElementById('keywordIndicator').classList.add('active');
+            updateStatus('listening', `🎯 키워드 감지! (${matchedKeyword}) 질문을 말하세요...`);
+            
+            // 활성화 타이머 시작
+            startActivationTimer();
+            
+            // 키워드 감지 후 설정된 대기 시간 후 자동으로 녹음 시작
+            const settings = getSettings();
+            setTimeout(() => {
+                if (sessionActive) {
+                    startRecording();
+                }
+            }, settings.keywordWaitTime);
+        }
+        
+        // 키워드 감지 처리 (레거시, 호환성을 위해 유지)
+        function detectKeyword() {
+            activateKeyword(KEYWORD, KEYWORD);
+        }
+        
+        // 음성 지문 등록
+        async function registerVoiceprint(sttKeyword, audioBlob) {
+            try {
+                // 오디오를 Base64로 변환
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64Audio = reader.result.split(',')[1]; // data:audio/...;base64, 제거
+                    
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/keyword/voiceprint/register`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                base_keyword: KEYWORD,
+                                stt_keyword: sttKeyword,
+                                audio_data: base64Audio,
+                                session_id: sessionId
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        const data = await response.json();
+                        console.log('음성 지문 등록:', data.is_new ? '신규' : '업데이트', data.voiceprint_id);
+                        
+                        // UI 피드백
+                        if (data.success) {
+                            const message = data.is_new 
+                                ? `✅ 새로운 음성 지문이 등록되었습니다 (ID: ${data.voiceprint_id})`
+                                : `🔄 음성 지문이 업데이트되었습니다 (ID: ${data.voiceprint_id})`;
+                            showVoiceprintStatus(message, true);
+                            
+                            // 음성 지문 개수 업데이트
+                            await updateVoiceprintCount();
+                        }
+                    } catch (error) {
+                        console.error('음성 지문 등록 오류:', error);
+                        showVoiceprintStatus(`❌ 음성 지문 등록 실패: ${error.message}`, false);
+                    }
+                };
+                reader.readAsDataURL(audioBlob);
+            } catch (error) {
+                console.error('음성 지문 등록 준비 오류:', error);
+                showVoiceprintStatus(`❌ 음성 지문 등록 준비 실패: ${error.message}`, false);
+            }
+        }
+        
+        // 오디오 레벨 측정 재시작
+        async function restartAudioLevelMeter() {
+            if (!isListening) {
+                return; // listening이 아니면 리턴
+            }
+            
+            // 이미 audioContext가 있고 실행 중이면 리턴
+            if (audioContext && levelAnimationFrame) {
+                return;
+            }
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // audioContext가 없으면 새로 생성
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 256;
+                    const bufferLength = analyser.frequencyBinCount;
+                    dataArray = new Uint8Array(bufferLength);
+                }
+                
+                // 기존 microphone이 있으면 disconnect
+                if (microphone) {
+                    microphone.disconnect();
+                }
+                
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                
+                // 오디오 레벨 측정 시작
+                if (!levelAnimationFrame) {
+                    measureAudioLevel();
+                }
+            } catch (error) {
+                console.error('오디오 레벨 측정 재시작 실패:', error);
+            }
+        }
+        
+        // 녹음 시작 (MediaRecorder 사용)
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let dataArray = null;
+        let levelAnimationFrame = null;
+        
+        // 오디오 레벨 측정 함수
+        function measureAudioLevel() {
+            if (!analyser || !dataArray) return;
+            
+            // 시간 도메인 데이터 사용 (더 정확한 레벨 측정)
+            analyser.getByteTimeDomainData(dataArray);
+            
+            // RMS (Root Mean Square) 계산
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+                const normalized = (dataArray[i] - 128) / 128;
+                sum += normalized * normalized;
+            }
+            const rms = Math.sqrt(sum / dataArray.length);
+            
+            // 데시벨로 변환
+            // 참고: 실제 dB는 음압 기준이지만, 여기서는 상대적 레벨을 표시
+            const dbLevel = rms > 0 ? 20 * Math.log10(rms) : -Infinity;
+            const normalizedLevel = Math.max(0, Math.min(1, rms));
+            
+            // 레벨 업데이트
+            updateAudioLevel(normalizedLevel, dbLevel);
+            
+            // 애니메이션 프레임으로 계속 측정
+            if (isListening || sessionActive || audioContext) {
+                levelAnimationFrame = requestAnimationFrame(measureAudioLevel);
+            }
+        }
+        
+        // 오디오 레벨 UI 업데이트
+        function updateAudioLevel(level, dbLevel) {
+            const levelBar = document.getElementById('levelBar');
+            const levelValue = document.getElementById('levelValue');
+            
+            // 레벨을 0-100%로 변환
+            const percentage = Math.min(100, level * 100);
+            levelBar.style.width = percentage + '%';
+            
+            // 데시벨 표시
+            if (dbLevel === -Infinity || dbLevel < -60) {
+                levelValue.textContent = '-∞ dB';
+                levelValue.className = 'level-value silent';
+            } else {
+                levelValue.textContent = dbLevel.toFixed(1) + ' dB';
+                
+                // 레벨에 따른 색상 변경
+                if (dbLevel < -30) {
+                    levelValue.className = 'level-value silent';
+                } else if (dbLevel < -15) {
+                    levelValue.className = 'level-value low';
+                } else if (dbLevel < -5) {
+                    levelValue.className = 'level-value medium';
+                } else {
+                    levelValue.className = 'level-value high';
+                }
+            }
+        }
+        
+        async function startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // 오디오 레벨 측정을 위한 AudioContext 설정 (이미 있으면 재사용)
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 256;
+                    const bufferLength = analyser.frequencyBinCount;
+                    dataArray = new Uint8Array(bufferLength);
+                }
+                
+                // 새로운 스트림을 analyser에 연결 (기존 microphone이 있으면 disconnect)
+                if (microphone) {
+                    microphone.disconnect();
+                }
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                
+                // 오디오 레벨 측정이 실행 중이 아니면 시작
+                if (!levelAnimationFrame) {
+                    measureAudioLevel();
+                }
+                
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    // microphone disconnect만 하고 audioContext는 유지 (연속 대화를 위해)
+                    if (microphone) {
+                        microphone.disconnect();
+                        microphone = null;
+                    }
+                    // audioContext는 유지하여 오디오 레벨 측정 계속
+                    processRecording();
+                };
+                
+                mediaRecorder.start();
+                updateStatus('listening', '<span class="recording-indicator"></span>녹음 중... 질문을 말하세요');
+                
+                // 자동 중지 타이머 (설정된 시간 후)
+                const settings = getSettings();
+                setTimeout(() => {
+                    if (mediaRecorder && mediaRecorder.state === 'recording') {
+                        stopRecording();
+                    }
+                }, settings.recordingDuration);
+                
+            } catch (error) {
+                console.error('녹음 시작 실패:', error);
+                updateStatus('waiting', '마이크 접근 권한이 필요합니다.');
+                sessionActive = false;
+                updateAudioLevel(0, -Infinity);
+            }
+        }
+        
+        // 녹음 중지
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+        }
+        
+        // 녹음된 음성 처리
+        async function processRecording() {
+            if (audioChunks.length === 0) {
+                sessionActive = false;
+                updateStatus('waiting', '녹음된 음성이 없습니다. 다시 시도해주세요.');
+                return;
+            }
+            
+            try {
+                updateStatus('processing', '처리 중... (STT → ChatGPT → TTS)');
+                
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recording.webm');
+                
+                // JSON 응답 형식으로 요청
+                const response = await fetch(
+                    `${API_BASE_URL}/api/voice/process?session_id=${sessionId}&response_format=json`,
+                    {
+                        method: 'POST',
+                        body: formData
+                    }
+                );
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 사용자 질문 표시
+                    const userText = data.user_text || '질문';
+                    addMessage('user', userText);
+                    
+                    // AI 응답 표시
+                    const assistantText = data.assistant_text;
+                    addMessage('assistant', assistantText);
+                    
+                    // 대화 히스토리 저장 (세션별로 관리)
+                    saveConversationMessage('user', userText);
+                    saveConversationMessage('assistant', assistantText);
+                    
+                    // 키워드 감지 후 첫 질문이면 음성 지문 등록 시도
+                    if (lastDetectedKeyword) {
+                        // voiceprint_id가 null이거나, 새로운 STT 결과면 등록
+                        if (lastDetectedKeyword.voiceprint_id === null || 
+                            lastDetectedKeyword.stt_result !== data.user_text) {
+                            // 질문 오디오를 음성 지문으로 등록
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                            registerVoiceprint(lastDetectedKeyword.stt_result, audioBlob);
+                        }
+                    }
+                    
+                    // Base64 오디오 디코딩 및 재생
+                    if (data.audio_base64) {
+                        playAudioFromBase64(data.audio_base64, data.assistant_text);
+                    }
+                    
+                    // 연속 대화를 위해 세션 활성 상태 유지 (활성화 시간 내)
+                    // sessionActive는 활성화 타이머가 관리하므로 여기서는 false로 설정하지 않음
+                    // 단, lastDetectedKeyword는 초기화 (다음 대화에서는 키워드 없이 바로 질문 가능)
+                    lastDetectedKeyword = null; // 사용 후 초기화
+                    
+                    // 활성화 상태가 유지되면 키워드 표시는 유지
+                    if (sessionActive) {
+                        document.getElementById('keywordStatus').textContent = '질문을 말하세요';
+                        // 키워드 인디케이터는 활성 상태 유지
+                    }
+                    
+                    // 활성화 시간 내이면 키워드 감지 없이 바로 다음 질문 가능
+                    // recognition은 계속 실행 중이지만, 키워드 감지는 sessionActive가 true일 때는 무시됨
+                    
+                } else {
+                    throw new Error(data.error || '처리 실패');
+                }
+                
+            } catch (error) {
+                console.error('처리 오류:', error);
+                updateStatus('waiting', `오류: ${error.message}`);
+                sessionActive = false;
+            }
+        }
+        
+        // Base64 오디오 재생
+        function playAudioFromBase64(base64Audio, text) {
+            try {
+                // Base64 디코딩
+                const binaryString = atob(base64Audio);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                
+                const audioBlob = new Blob([bytes], { type: 'audio/mpeg' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // 기존 오디오 정리
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
+                }
+                
+                currentAudio = new Audio(audioUrl);
+                currentAudio.onloadedmetadata = () => {
+                    updateStatus('playing', '🔊 응답 재생 중...');
+                };
+                
+                currentAudio.onended = () => {
+                    const settings = getSettings();
+                    highlightText('', 0); // 하이라이트 제거
+                    URL.revokeObjectURL(audioUrl);
+                    currentAudio = null;
+                    
+                    if (settings.autoWaitMode && isListening) {
+                        // 자동 대기 모드: 오디오 재생 완료 후 자동으로 다음 입력 대기
+                        if (sessionActive) {
+                            // 활성화 상태가 유지되면 키워드 없이 바로 질문 가능
+                            updateStatus('listening', '질문을 말하세요... (활성화 상태 유지 중)');
+                            document.getElementById('keywordStatus').textContent = '질문을 말하세요';
+                            // 키워드 인디케이터는 활성 상태 유지
+                            
+                            // 활성화 시간 내이면 바로 녹음 시작 가능
+                            setTimeout(() => {
+                                if (sessionActive && isListening) {
+                                    startRecording();
+                                }
+                            }, 500);
+                        } else {
+                            // 활성화 시간이 지나면 키워드 감지 모드로 전환
+                            updateStatus('waiting', '대기 중... "alfred"라고 말해주세요');
+                            document.getElementById('keywordStatus').textContent = '대기 중';
+                            document.getElementById('keywordIndicator').classList.remove('active');
+                            hideSimilarity();
+                            
+                            // 키워드 감지를 다시 활성화
+                            if (recognition && isListening) {
+                                setTimeout(() => {
+                                    try {
+                                        if (isListening && !sessionActive && recognition) {
+                                            if (recognition.state === 'stopped' || recognition.state === 'inactive') {
+                                                recognition.start();
+                                                console.log('오디오 재생 후 키워드 감지 재시작');
+                                            }
+                                        }
+                                    } catch (e) {
+                                        console.log('오디오 재생 후 recognition 재시작 실패:', e);
+                                    }
+                                }, 500);
+                            }
+                        }
+                        
+                        // 오디오 레벨 측정이 계속 실행되도록 확인
+                        if (!audioContext && isListening) {
+                            setTimeout(() => {
+                                restartAudioLevelMeter();
+                            }, 500);
+                        }
+                    } else {
+                        if (sessionActive) {
+                            updateStatus('listening', '재생 완료. 질문을 말하세요... (활성화 상태 유지 중)');
+                        } else {
+                            updateStatus('waiting', '재생 완료. 다시 시작하려면 "시작" 버튼을 클릭하세요.');
+                        }
+                    }
+                };
+                
+                // 텍스트 동기화
+                currentAudio.addEventListener('timeupdate', () => {
+                    if (currentAudio && currentAudio.duration) {
+                        const progress = currentAudio.currentTime / currentAudio.duration;
+                        highlightText(text, progress);
+                    }
+                });
+                
+                currentAudio.play().catch(error => {
+                    console.error('오디오 재생 실패:', error);
+                    updateStatus('waiting', '오디오 재생 실패');
+                });
+                
+            } catch (error) {
+                console.error('Base64 디코딩 오류:', error);
+                updateStatus('waiting', '오디오 디코딩 실패');
+            }
+        }
+        
+        // 텍스트 하이라이트 (동기화)
+        function highlightText(text, progress) {
+            const messages = document.querySelectorAll('.message.assistant .message-text');
+            const lastMessage = messages[messages.length - 1];
+            
+            if (!lastMessage) return;
+            
+            const words = text.split(' ');
+            const highlightIndex = Math.floor(words.length * progress);
+            
+            let highlightedText = '';
+            words.forEach((word, index) => {
+                if (index < highlightIndex) {
+                    highlightedText += `<span class="highlight">${word}</span> `;
+                } else {
+                    highlightedText += word + ' ';
+                }
+            });
+            
+            lastMessage.innerHTML = highlightedText;
+        }
+        
+        // 메시지 추가
+        function addMessage(role, text) {
+            const conversation = document.getElementById('conversation');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            
+            const header = document.createElement('div');
+            header.className = 'message-header';
+            header.textContent = role === 'user' ? '👤 사용자' : '🤖 Alfred';
+            
+            const textDiv = document.createElement('div');
+            textDiv.className = 'message-text';
+            textDiv.textContent = text;
+            
+            messageDiv.appendChild(header);
+            messageDiv.appendChild(textDiv);
+            conversation.appendChild(messageDiv);
+            
+            // 스크롤을 맨 아래로
+            conversation.scrollTop = conversation.scrollHeight;
+        }
+        
+        // 세션별 대화 히스토리 표시
+        function displayConversationHistory() {
+            const conversation = document.getElementById('conversation');
+            conversation.innerHTML = ''; // 기존 대화 초기화
+            
+            if (sessionHistories[sessionId] && sessionHistories[sessionId].length > 0) {
+                sessionHistories[sessionId].forEach(msg => {
+                    addMessage(msg.role, msg.text);
+                });
+            }
+        }
+        
+        // 대화 메시지 저장 (세션별)
+        function saveConversationMessage(role, text) {
+            if (!sessionHistories[sessionId]) {
+                sessionHistories[sessionId] = [];
+            }
+            
+            sessionHistories[sessionId].push({
+                role: role,
+                text: text,
+                timestamp: new Date().toISOString()
+            });
+            
+            // USER ID별 세션 목록 업데이트
+            if (userId) {
+                if (!userSessions[userId]) {
+                    userSessions[userId] = [];
+                }
+                if (!userSessions[userId].includes(sessionId)) {
+                    userSessions[userId].push(sessionId);
+                }
+            }
+        }
+        
+        // 키워드 시도 기록
+        function recordKeywordAttempt(sttResult, baseKeyword, matched, similarity) {
+            keywordAttempts.push({
+                timestamp: new Date().toISOString(),
+                stt_result: sttResult,
+                base_keyword: baseKeyword,
+                matched: matched,
+                similarity: similarity,
+                session_id: sessionId,
+                user_id: userId
+            });
+        }
+        
+        // USER ID 변경
+        function onUserIdChange() {
+            const inputUserId = document.getElementById('userIdInput').value.trim();
+            if (inputUserId && inputUserId !== userId) {
+                userId = inputUserId;
+                updateCurrentUserSession();
+                updateSessionSelect();
+            }
+        }
+        
+        // USER ID 생성
+        function generateUserId() {
+            userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            document.getElementById('userIdInput').value = userId;
+            updateCurrentUserSession();
+            
+            // 새 세션 생성
+            createNewSession();
+        }
+        
+        // 새 세션 생성
+        function createNewSession() {
+            if (!userId) {
+                generateUserId(); // USER ID가 없으면 자동 생성
+            }
+            
+            sessionId = 'alfred_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            
+            // 세션 히스토리 초기화
+            if (!sessionHistories[sessionId]) {
+                sessionHistories[sessionId] = [];
+            }
+            
+            // 대화 UI 초기화
+            document.getElementById('conversation').innerHTML = '';
+            
+            // 세션 선택 목록 업데이트
+            updateSessionSelect();
+            updateCurrentUserSession();
+        }
+        
+        // 세션 ID 변경
+        function onSessionIdChange() {
+            const select = document.getElementById('sessionIdSelect');
+            const selectedSessionId = select.value;
+            
+            if (selectedSessionId) {
+                sessionId = selectedSessionId;
+                updateCurrentUserSession();
+                displayConversationHistory();
+            }
+        }
+        
+        // 세션 선택 목록 업데이트
+        function updateSessionSelect() {
+            const select = document.getElementById('sessionIdSelect');
+            const currentValue = select.value || sessionId;
+            
+            select.innerHTML = '<option value="">새 세션 생성</option>';
+            
+            if (userId && userSessions[userId]) {
+                userSessions[userId].forEach(sid => {
+                    const selected = sid === currentValue ? 'selected' : '';
+                    const date = new Date(parseInt(sid.split('_')[1])).toLocaleString('ko-KR');
+                    select.innerHTML += `<option value="${sid}" ${selected}>${sid} (${date})</option>`;
+                });
+            }
+            
+            // 현재 세션도 추가 (목록에 없으면)
+            if (sessionId && (!userId || !userSessions[userId] || !userSessions[userId].includes(sessionId))) {
+                const date = new Date(parseInt(sessionId.split('_')[1])).toLocaleString('ko-KR');
+                select.innerHTML += `<option value="${sessionId}" selected>${sessionId} (${date})</option>`;
+            }
+        }
+        
+        // 세션 히스토리 로드
+        function loadSessionHistory() {
+            const inputUserId = document.getElementById('userIdInput').value.trim();
+            
+            if (!inputUserId) {
+                alert('USER ID를 입력하거나 생성해주세요.');
+                return;
+            }
+            
+            userId = inputUserId;
+            updateCurrentUserSession();
+            updateSessionSelect();
+            
+            // 현재 세션의 히스토리 표시
+            displayConversationHistory();
+            
+            alert(`USER ID "${userId}"의 세션 히스토리를 로드했습니다.`);
+        }
+        
+        // 현재 USER ID와 Session ID UI 업데이트
+        function updateCurrentUserSession() {
+            document.getElementById('currentUserId').textContent = userId || '-';
+            document.getElementById('currentSessionId').textContent = sessionId || '-';
+            
+            if (userId) {
+                document.getElementById('userIdInput').value = userId;
+            }
+        }
+        
+        // 대화 내용 다운로드
+        function downloadConversation() {
+            if (!sessionHistories[sessionId] || sessionHistories[sessionId].length === 0) {
+                alert('다운로드할 대화 내용이 없습니다.');
+                return;
+            }
+            
+            const history = sessionHistories[sessionId];
+            const data = {
+                user_id: userId,
+                session_id: sessionId,
+                created_at: new Date().toISOString(),
+                messages: history
+            };
+            
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `conversation_${userId}_${sessionId}_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // 키워드 시도 목록 다운로드
+        function downloadKeywordAttempts() {
+            if (keywordAttempts.length === 0) {
+                alert('다운로드할 키워드 시도 기록이 없습니다.');
+                return;
+            }
+            
+            const data = {
+                user_id: userId,
+                session_id: sessionId,
+                created_at: new Date().toISOString(),
+                total_attempts: keywordAttempts.length,
+                successful_attempts: keywordAttempts.filter(a => a.matched).length,
+                failed_attempts: keywordAttempts.filter(a => !a.matched).length,
+                attempts: keywordAttempts
+            };
+            
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `keyword_attempts_${userId}_${sessionId}_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        
+        // 상태 업데이트
+        function updateStatus(status, message) {
+            const statusBar = document.getElementById('statusBar');
+            statusBar.className = `status-bar ${status}`;
+            statusBar.innerHTML = message;
+        }
+        
+        // 듣기 시작
+        async function startListening() {
+            recognition = initSpeechRecognition();
+            if (!recognition) {
+                alert('Web Speech API를 지원하지 않는 브라우저입니다.');
+                return;
+            }
+            
+            try {
+                // 키워드 감지를 위한 오디오 레벨 측정 시작 (마이크 스트림만)
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    analyser = audioContext.createAnalyser();
+                    microphone = audioContext.createMediaStreamSource(stream);
+                    
+                    analyser.fftSize = 256;
+                    const bufferLength = analyser.frequencyBinCount;
+                    dataArray = new Uint8Array(bufferLength);
+                    
+                    microphone.connect(analyser);
+                    measureAudioLevel();
+                } catch (error) {
+                    console.error('오디오 레벨 측정 시작 실패:', error);
+                }
+                
+                recognition.start();
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = false;
+                
+                // 음성 지문 개수 조회
+                await updateVoiceprintCount();
+            } catch (error) {
+                console.error('시작 실패:', error);
+            }
+        }
+        
+        // 듣기 중지
+        function stopListening() {
+            if (recognition) {
+                isListening = false;
+                recognition.stop();
+            }
+            
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                stopRecording();
+            }
+            
+            if (currentAudio) {
+                currentAudio.pause();
+            }
+            
+            // 활성화 타이머 정리
+            clearActivationTimer();
+            
+            // 오디오 레벨 측정 중지 (완전히 중지할 때만)
+            if (levelAnimationFrame) {
+                cancelAnimationFrame(levelAnimationFrame);
+                levelAnimationFrame = null;
+            }
+            if (audioContext) {
+                try {
+                    audioContext.close();
+                } catch (e) {
+                    console.log('AudioContext 종료 오류:', e);
+                }
+                audioContext = null;
+                analyser = null;
+                microphone = null;
+                dataArray = null;
+            }
+            updateAudioLevel(0, -Infinity);
+            
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            sessionActive = false;
+            updateStatus('waiting', '중지됨');
+        }
+        
+        // 대화 초기화
+        function resetConversation() {
+            conversationHistory = [];
+            document.getElementById('conversation').innerHTML = '';
+            
+            // 새 세션 생성 (기존 세션 히스토리는 유지)
+            createNewSession();
+            
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            
+            // 활성화 타이머 정리
+            clearActivationTimer();
+            
+            sessionActive = false;
+            document.getElementById('keywordStatus').textContent = '대기 중';
+            document.getElementById('keywordIndicator').classList.remove('active');
+            hideSimilarity();
+            updateStatus('waiting', '대화가 초기화되었습니다. 새 세션이 생성되었습니다.');
+        }
+        
+        // 페이지 로드 시 설정 패널 기본값 설정
+        // ============= 개발자 디버깅 함수 =============
+        
+        // 디버깅 패널 토글
+        function toggleDebugPanel() {
+            const content = document.getElementById('debugContent');
+            content.classList.toggle('active');
+        }
+        
+        // STT 모델 변경
+        function onSTTModelChange() {
+            currentSTTModel = document.getElementById('sttModelSelect').value;
+            console.log('STT 모델 변경:', currentSTTModel);
+            // TODO: 실제 STT 모델 변경 로직 구현 (현재는 브라우저 STT만 사용)
+        }
+        
+        // 키워드 변경
+        function onKeywordChange() {
+            const select = document.getElementById('keywordSelect');
+            const newKeyword = select.value;
+            const oldKeyword = KEYWORD;
+            KEYWORD = newKeyword;
+            console.log('🔄 키워드 변경:', oldKeyword, '→', newKeyword);
+            document.getElementById('debugBaseKeyword').textContent = KEYWORD;
+            
+            // 상태 메시지 업데이트
+            updateStatus('waiting', `키워드 변경됨: "${KEYWORD}" - 말해주세요`);
+            
+            // 음성 지문 목록 다시 로드
+            loadVoiceprints();
+            
+            // 세션 비활성화 (새 키워드로 재시작)
+            if (sessionActive) {
+                sessionActive = false;
+                document.getElementById('keywordStatus').textContent = '대기 중...';
+                document.getElementById('keywordIndicator').classList.remove('active');
+                console.log('🔄 세션 비활성화 (키워드 변경)');
+            }
+        }
+        
+        // 키워드 목록 로드 (DB에서 등록된 키워드 목록 가져오기)
+        async function loadKeywords() {
+            try {
+                console.log('🔍 키워드 목록 로드 시작...');
+                const response = await fetch(`${API_BASE_URL}/api/keyword/voiceprint`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                if (data.success && data.voiceprints) {
+                    // 고유한 base_keyword 목록 추출
+                    const uniqueKeywords = [...new Set(data.voiceprints.map(vp => vp.base_keyword))];
+                    
+                    console.log('📋 등록된 키워드 목록:', uniqueKeywords);
+                    console.log('📊 총 음성 지문 개수:', data.voiceprints.length);
+                    
+                    const select = document.getElementById('keywordSelect');
+                    const currentValue = select.value;
+                    
+                    // 옵션 초기화
+                    select.innerHTML = '';
+                    
+                    // 기본값 추가 (alfred가 없으면)
+                    if (!uniqueKeywords.includes('alfred')) {
+                        select.innerHTML += '<option value="alfred">alfred (기본)</option>';
+                    }
+                    
+                    // DB에서 가져온 키워드 추가
+                    uniqueKeywords.forEach(keyword => {
+                        const selected = keyword === currentValue ? 'selected' : '';
+                        select.innerHTML += `<option value="${keyword}" ${selected}>${keyword}</option>`;
+                    });
+                    
+                    // 현재 선택된 값이 없으면 첫 번째 키워드 선택
+                    if (!currentValue && uniqueKeywords.length > 0) {
+                        select.value = uniqueKeywords[0];
+                        KEYWORD = uniqueKeywords[0];
+                        document.getElementById('debugBaseKeyword').textContent = KEYWORD;
+                        console.log('✅ 기본 키워드 설정:', KEYWORD);
+                    } else if (currentValue) {
+                        KEYWORD = currentValue;
+                        document.getElementById('debugBaseKeyword').textContent = KEYWORD;
+                        console.log('✅ 현재 키워드 유지:', KEYWORD);
+                    }
+                    
+                    // 상태 메시지 업데이트
+                    updateStatus('waiting', `키워드 선택됨: "${KEYWORD}" - 말해주세요`);
+                    
+                    console.log('✅ 키워드 목록 로드 완료:', uniqueKeywords);
+                    console.log('🎯 현재 선택된 키워드:', KEYWORD);
+                } else {
+                    console.warn('⚠️ 키워드 목록이 비어있습니다.');
+                    // 기본값 유지
+                    KEYWORD = 'alfred';
+                    document.getElementById('debugBaseKeyword').textContent = KEYWORD;
+                }
+            } catch (error) {
+                console.error('❌ 키워드 목록 로드 실패:', error);
+                alert('키워드 목록을 불러오는데 실패했습니다: ' + error.message);
+                // 기본값 유지
+                KEYWORD = 'alfred';
+                document.getElementById('debugBaseKeyword').textContent = KEYWORD;
+            }
+        }
+        
+        // 음성 지문 목록 로드
+        async function loadVoiceprints() {
+            try {
+                const select = document.getElementById('keywordSelect');
+                const selectedKeyword = select ? select.value : KEYWORD;
+                
+                const response = await fetch(`${API_BASE_URL}/api/keyword/voiceprint?base_keyword=${selectedKeyword}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                if (data.success && data.voiceprints) {
+                    voiceprints = data.voiceprints;
+                    const listDiv = document.getElementById('voiceprintList');
+                    const countSpan = document.getElementById('voiceprintListCount');
+                    
+                    // 전체 개수와 반환된 개수 표시
+                    const totalCount = data.total_count !== undefined ? data.total_count : voiceprints.length;
+                    const returnedCount = voiceprints.length;
+                    
+                    if (totalCount !== returnedCount) {
+                        countSpan.textContent = `${returnedCount} / ${totalCount}`;
+                        console.warn(`⚠️ 음성 지문 일부만 반환됨: ${returnedCount}개 / 전체 ${totalCount}개`);
+                    } else {
+                        countSpan.textContent = voiceprints.length;
+                    }
+                    
+                    if (voiceprints.length === 0) {
+                        listDiv.innerHTML = '<div style="text-align: center; color: #666; padding: 20px;">등록된 음성 지문이 없습니다.</div>';
+                    } else {
+                        listDiv.innerHTML = voiceprints.map(vp => {
+                            const matched = matchedVoiceprintId === vp.id ? 'matched' : '';
+                            return `
+                                <div class="voiceprint-item ${matched}" id="vp-${vp.id}">
+                                    <strong>ID:</strong> ${vp.id} | 
+                                    <strong>STT 키워드:</strong> ${vp.stt_keyword} | 
+                                    <strong>오디오:</strong> ${vp.has_audio ? '있음' : '없음'} | 
+                                    <strong>생성일:</strong> ${new Date(vp.created_at).toLocaleString('ko-KR')}
+                                </div>
+                            `;
+                        }).join('');
+                    }
+                    
+                    console.log('✅ 음성 지문 목록 로드 완료:', {
+                        returned: returnedCount,
+                        total: totalCount,
+                        base_keyword: selectedKeyword
+                    });
+                }
+            } catch (error) {
+                console.error('음성 지문 목록 로드 실패:', error);
+                const listDiv = document.getElementById('voiceprintList');
+                listDiv.innerHTML = '<div style="text-align: center; color: #dc3545; padding: 20px;">로드 실패: ' + error.message + '</div>';
+            }
+        }
+        
+        // STT 결과 업데이트 (실시간)
+        function updateSTTDisplay(interimText, finalText) {
+            const interimDiv = document.getElementById('sttInterim');
+            const finalDiv = document.getElementById('sttFinal');
+            
+            if (interimDiv) {
+                if (interimText) {
+                    interimDiv.textContent = '인식 중: ' + interimText;
+                    interimDiv.style.display = 'block';
+                } else {
+                    interimDiv.style.display = 'none';
+                }
+            }
+            
+            if (finalDiv) {
+                if (finalText) {
+                    finalDiv.textContent = '최종 인식: ' + finalText;
+                    finalDiv.style.display = 'block';
+                } else {
+                    finalDiv.style.display = 'none';
+                }
+            }
+        }
+        
+        // 매칭 정보 업데이트
+        function updateMatchInfo(isMatched, matchedKeyword, voiceprintId, similarity) {
+            const matchInfo = document.getElementById('matchInfo');
+            const matchStatus = document.getElementById('matchStatus');
+            const matchedKeywordSpan = document.getElementById('matchedKeyword');
+            const matchedVoiceprintIdSpan = document.getElementById('matchedVoiceprintId');
+            
+            if (isMatched) {
+                matchInfo.classList.add('active');
+                matchStatus.textContent = '매칭 성공';
+                matchedKeywordSpan.textContent = matchedKeyword || '-';
+                matchedVoiceprintIdSpan.textContent = voiceprintId || '-';
+                matchedVoiceprintId = voiceprintId;
+                
+                // 매칭된 음성 지문 하이라이트
+                voiceprints.forEach(vp => {
+                    const item = document.getElementById(`vp-${vp.id}`);
+                    if (item) {
+                        if (vp.id === voiceprintId) {
+                            item.classList.add('matched');
+                        } else {
+                            item.classList.remove('matched');
+                        }
+                    }
+                });
+            } else {
+                matchInfo.classList.remove('active');
+                matchStatus.textContent = '매칭 실패 또는 대기 중';
+                matchedKeywordSpan.textContent = '-';
+                matchedVoiceprintIdSpan.textContent = '-';
+                matchedVoiceprintId = null;
+                
+                // 모든 하이라이트 제거
+                voiceprints.forEach(vp => {
+                    const item = document.getElementById(`vp-${vp.id}`);
+                    if (item) {
+                        item.classList.remove('matched');
+                    }
+                });
+            }
+        }
+        
+        // 유사도 정보 업데이트
+        function updateSimilarityInfo(sttResult, baseKeyword, similarity) {
+            const sttResultSpan = document.getElementById('debugSTTResult');
+            const baseKeywordSpan = document.getElementById('debugBaseKeyword');
+            const similaritySpan = document.getElementById('debugSimilarity');
+            
+            if (sttResultSpan) {
+                sttResultSpan.textContent = sttResult || '-';
+            }
+            
+            if (baseKeywordSpan) {
+                baseKeywordSpan.textContent = baseKeyword || KEYWORD;
+            }
+            
+            if (similaritySpan && similarity !== undefined && similarity !== null) {
+                const similarityPercent = (similarity * 100).toFixed(1);
+                similaritySpan.textContent = `${similarityPercent}% (${similarity.toFixed(3)})`;
+                
+                // 유사도에 따른 색상 변경
+                similaritySpan.classList.remove('high', 'medium', 'low');
+                if (similarity >= 0.7) {
+                    similaritySpan.classList.add('high');
+                } else if (similarity >= 0.5) {
+                    similaritySpan.classList.add('medium');
+                } else {
+                    similaritySpan.classList.add('low');
+                }
+            } else {
+                if (similaritySpan) {
+                    similaritySpan.textContent = '-';
+                    similaritySpan.classList.remove('high', 'medium', 'low');
+                }
+            }
+        }
+        
+        window.addEventListener('DOMContentLoaded', () => {
+            // 설정 값 localStorage에서 불러오기 (선택사항)
+            const savedRecordingDuration = localStorage.getItem('recordingDuration');
+            const savedKeywordWaitTime = localStorage.getItem('keywordWaitTime');
+            const savedAutoWaitMode = localStorage.getItem('autoWaitMode');
+            
+            if (savedRecordingDuration) {
+                document.getElementById('recordingDuration').value = savedRecordingDuration;
+            }
+            if (savedKeywordWaitTime) {
+                document.getElementById('keywordWaitTime').value = savedKeywordWaitTime;
+            }
+            if (savedAutoWaitMode !== null) {
+                document.getElementById('autoWaitMode').checked = savedAutoWaitMode === 'true';
+            }
+            
+            // 설정 변경 시 localStorage에 저장
+            document.getElementById('recordingDuration').addEventListener('change', (e) => {
+                localStorage.setItem('recordingDuration', e.target.value);
+            });
+            document.getElementById('keywordWaitTime').addEventListener('change', (e) => {
+                localStorage.setItem('keywordWaitTime', e.target.value);
+            });
+            document.getElementById('autoWaitMode').addEventListener('change', (e) => {
+                localStorage.setItem('autoWaitMode', e.target.checked);
+            });
+            
+            // 활성화 유지 시간 설정 불러오기
+            const savedActivationDuration = localStorage.getItem('activationDuration');
+            if (savedActivationDuration) {
+                document.getElementById('activationDuration').value = savedActivationDuration;
+            }
+            document.getElementById('activationDuration').addEventListener('change', (e) => {
+                localStorage.setItem('activationDuration', e.target.value);
+            });
+            
+            // 디버깅 패널 초기화
+            console.log('🚀 페이지 로드 완료 - 초기화 시작');
+            // 키워드 목록 먼저 로드 (음성 지문 목록보다 먼저)
+            loadKeywords().then(() => {
+                // 키워드 목록 로드 후 음성 지문 목록 로드
+                loadVoiceprints();
+                console.log('✅ 초기화 완료');
+            }).catch(error => {
+                console.error('❌ 키워드 목록 로드 실패:', error);
+                // 실패해도 음성 지문 목록은 로드 시도
+                loadVoiceprints();
+            });
+            
+            // 사용자 및 세션 초기화
+            if (!userId) {
+                generateUserId(); // 자동으로 USER ID 생성
+            }
+            updateCurrentUserSession();
+            updateSessionSelect();
+        });
+    </script>
+</body>
+</html>
+

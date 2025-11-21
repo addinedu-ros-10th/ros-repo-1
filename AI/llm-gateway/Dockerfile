@@ -12,8 +12,12 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 애플리케이션 코드 복사
-COPY . .
+# 소스 코드 복사
+COPY src/ ./src/
+# 테스트 파일 복사 (정적 파일 서빙용)
+COPY tests/ ./tests/
+# 설정 파일 복사
+COPY docker-compose.yml .env.example .dockerignore ./
 
 # 포트 노출
 EXPOSE 8000
@@ -23,6 +27,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/')" || exit 1
 
 # 서버 실행
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 

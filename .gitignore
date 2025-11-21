@@ -135,7 +135,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+.env*
 .envrc
 .venv
 env/
@@ -248,6 +248,4 @@ package-lock.json
 
 # ---- Docker / Logs ----
 docker-compose.override.yml
-.env.local
-.env.dev
-.env.prod
+# .env* files are already ignored above
