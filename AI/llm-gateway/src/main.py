@@ -489,10 +489,14 @@ async def text_chat(request: TextChatRequest):
         
         # 최종 응답이 없으면 마지막으로 한 번 더 호출
         if final_response is None:
-            final_response_message = await client.chat.completions.create(
-                model=model,
-                messages=messages
-            )
+            final_api_params = {
+                "model": model,
+                "messages": messages
+            }
+            if tools and len(tools) > 0:
+                final_api_params["tools"] = tools
+                final_api_params["tool_choice"] = "auto"
+            final_response_message = await client.chat.completions.create(**final_api_params)
             final_response = final_response_message.choices[0].message.content
 
         assistant_message = final_response
@@ -611,24 +615,20 @@ async def streaming_chat(request: TextChatRequest):
     3. 결과를 포함하여 최종 응답 스트리밍
     """
     async def generate():
+        # TOOLS 초기화 (함수 시작 시점에 정의)
+        tools = []
         try:
-            # 기본값 설정
-            base_system_prompt = request.system_prompt or settings.default_system_prompt
-            # System Prompt에 Function Calling 사용 안내 추가
-            system_prompt = f"""{base_system_prompt}
-
-중요: 사용자가 데이터 조회나 API 호출을 요청하면 반드시 제공된 함수를 사용해야 합니다. 일반적인 응답으로 대체하지 마세요.
-
-사용 가능한 함수:
-1. get_users_list: 사용자가 "사용자 목록", "사용자 리스트", "사용자 목록 보여줘", "사용자 조회" 등을 요청할 때 사용
-2. get_user_profile: 사용자가 "사용자 프로필", "사용자 정보", "사용자 상세" 등을 요청할 때 사용 (user_id 필요)
-3. get_user_relationships: 사용자가 "사용자 관계", "관계 정보" 등을 요청할 때 사용 (user_id 필요)
-
-규칙:
-- 사용자가 데이터 조회를 요청하면 반드시 해당 함수를 호출하세요
-- 함수를 사용할 수 있는 경우 일반적인 응답으로 대체하지 마세요
-- 함수 호출 결과를 받은 후 사용자에게 명확하게 전달하세요"""
+            # 통합 System Prompt 사용
+            system_prompt = build_system_prompt(request.system_prompt)
             model = request.model.value if request.model else settings.default_chat_model
+            
+            # TOOLS 가져오기 (통합 관리)
+            try:
+                tools = get_tools_for_api()
+                logger.info(f"Stream Chat API - TOOLS count: {len(tools)}, functions: {[t.get('function', {}).get('name') for t in tools]}")
+            except Exception as tools_error:
+                logger.error(f"Failed to get tools: {tools_error}", exc_info=True)
+                tools = []  # 실패 시 빈 리스트로 초기화
             
             # 세션 히스토리 관리
             try:
@@ -774,11 +774,15 @@ async def streaming_chat(request: TextChatRequest):
                 # 마지막 반복이면 최종 응답 스트리밍
                 if iteration >= max_iterations or not has_tool_calls:
                     # 3단계: 최종 응답 스트리밍 (tool 결과 포함)
-                    final_stream = await client.chat.completions.create(
-                        model=model,
-                        messages=messages,
-                        stream=True
-                    )
+                    final_api_params = {
+                        "model": model,
+                        "messages": messages,
+                        "stream": True
+                    }
+                    if tools and len(tools) > 0:
+                        final_api_params["tools"] = tools
+                        final_api_params["tool_choice"] = "auto"
+                    final_stream = await client.chat.completions.create(**final_api_params)
                     
                     final_response = ""
                     async for chunk in final_stream:
@@ -1088,10 +1092,14 @@ async def process_voice(
         
         # 최종 응답이 없으면 마지막으로 한 번 더 호출
         if assistant_text is None:
-            final_response_message = await client.chat.completions.create(
-                model=chat_model,
-                messages=messages
-            )
+            final_api_params = {
+                "model": chat_model,
+                "messages": messages
+            }
+            if tools and len(tools) > 0:
+                final_api_params["tools"] = tools
+                final_api_params["tool_choice"] = "auto"
+            final_response_message = await client.chat.completions.create(**final_api_params)
             assistant_text = final_response_message.choices[0].message.content
         
         # 어시스턴트 응답 저장
@@ -1883,20 +1891,8 @@ async def update_session_system_prompt(
         if not base_prompt_content:
             raise HTTPException(status_code=400, detail="System Prompt 내용을 찾을 수 없습니다")
         
-        # Function Calling 안내로 감싸기
-        prompt_content = f"""{base_prompt_content}
-
-중요: 사용자가 데이터 조회나 API 호출을 요청하면 반드시 제공된 함수를 사용해야 합니다. 일반적인 응답으로 대체하지 마세요.
-
-사용 가능한 함수:
-1. get_users_list: 사용자가 "사용자 목록", "사용자 리스트", "사용자 목록 보여줘", "사용자 조회" 등을 요청할 때 사용
-2. get_user_profile: 사용자가 "사용자 프로필", "사용자 정보", "사용자 상세" 등을 요청할 때 사용 (user_id 필요)
-3. get_user_relationships: 사용자가 "사용자 관계", "관계 정보" 등을 요청할 때 사용 (user_id 필요)
-
-규칙:
-- 사용자가 데이터 조회를 요청하면 반드시 해당 함수를 호출하세요
-- 함수를 사용할 수 있는 경우 일반적인 응답으로 대체하지 마세요
-- 함수 호출 결과를 받은 후 사용자에게 명확하게 전달하세요"""
+        # 통합 System Prompt 사용
+        prompt_content = build_system_prompt(base_prompt_content)
         
         logger.info(f"System Prompt updated for session {session_id} (base length: {len(base_prompt_content)}, wrapped length: {len(prompt_content)})")
         
