@@ -1,0 +1,96 @@
+# docker-compose.auto.yml
+# IoT Care Backend System 환경변수 자동 업데이트 + Docker Compose 시작
+# 모든 운영체제에서 사용 가능
+# 작성일: 2025-08-23
+
+version: '3.8'
+
+services:
+  # 환경변수 자동 업데이트 서비스
+  env-updater:
+    image: alpine:latest
+    container_name: iot-care-env-updater
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./.env.local:/.env.local:rw
+      - ./env_backups:/env_backups
+    working_dir: /scripts
+    command: >
+      sh -c "
+        echo '🔍 환경변수 자동 업데이트 시작...' &&
+        apk add --no-cache bash curl &&
+        chmod +x auto_env_update.sh &&
+        ./auto_env_update.sh &&
+        echo '✅ 환경변수 업데이트 완료' &&
+        echo '🚀 Docker Compose 서비스 시작 중...'
+      "
+    profiles:
+      - auto-setup
+    restart: "no"
+
+  # FastAPI 애플리케이션
+  app:
+    build: .
+    container_name: iot-care-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app:delegated
+      - ./tests:/app/tests:delegated
+      - ./logs:/app/logs
+      - ./config:/app/config
+    env_file:
+      - .env.local
+    depends_on:
+      - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - iot-care-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Redis (캐시, 세션, 태스크 큐)
+  redis:
+    image: redis:7-alpine
+    container_name: iot-care-redis
+    restart: unless-stopped
+    ports:
+      - "16379:6379"
+    volumes:
+      - redis_data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - iot-care-network
+
+  # Caddy 웹서버
+  caddy:
+    image: caddy:2-alpine
+    container_name: iot-care-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.local:/app/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    networks:
+      - iot-care-network
+    command: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+
+volumes:
+  redis_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+networks:
+  iot-care-network:
+    driver: bridge
+
