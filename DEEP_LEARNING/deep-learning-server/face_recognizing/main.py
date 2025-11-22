@@ -4,7 +4,7 @@ import threading
 import time
 
 import camera_receiver_yolo
-from camera_receiver_yolo import main
+from camera_receiver_yolo import main_yolo
 
 app = FastAPI()
 
@@ -22,7 +22,7 @@ def send_signal_run_yolo():
     global SIGNAL_FLAG
     SIGNAL_FLAG = 1
 
-    main()
+    main_yolo()
 
     return {"status": f"test message: yolo_terminated"}\
     
