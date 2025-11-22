@@ -259,6 +259,24 @@ docker-compose.override.yml
 *.cer
 *.jks
 
+# ---- Environment Files (explicit) ----
+.env
+.env.*
+.env.local
+.env.dev
+.env.prod
+.env.aws
+.env.local.backup*
+!*.env.example
+!*.env.template
+
+# ---- Secret Directories ----
+**/secret/
+**/secrets/
+**/*secret*/
+**/*key*/
+**/*password*/
+
 # ---- OS / System Files ----
 .DS_Store
 .DS_Store?
