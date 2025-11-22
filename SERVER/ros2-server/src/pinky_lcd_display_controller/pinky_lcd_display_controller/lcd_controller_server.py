@@ -170,27 +170,16 @@ class LCDControllerServer(Node):
         SetDisplay 서비스 콜백
         LCD에 표시할 내용을 설정합니다.
         
-        서비스 콜백 내부에서 다른 서비스를 호출하면 spin_once가 응답을 제대로 처리하지 못할 수 있습니다.
-        따라서 토픽을 통해 직접 전송합니다.
+        무한 루프 방지를 위해 서비스 클라이언트 호출을 제거하고,
+        토픽을 통해 직접 전송합니다.
         """
         try:
-            # 서비스 클라이언트로 호출 시도 (비동기, 응답 대기 안 함)
-            if self.set_display_client.wait_for_service(timeout_sec=0.5):
-                self.get_logger().debug('Calling SetDisplay service on pinky_lcd_display (async, no wait)')
-                # 비동기 호출만 하고 응답은 기다리지 않음
-                self.set_display_client.call_async(request)
-                # 즉시 성공 응답 반환
-                response.success = True
-                response.message = "Display update request sent (async)"
-                self.get_logger().info("SetDisplay service call sent (async)")
-            else:
-                # 서비스가 없으면 토픽으로 폴백
-                self.get_logger().debug("SetDisplay service not available, using topic")
-                self._fallback_to_topic_set_display(request, response)
-            
-        except Exception as e:
-            self.get_logger().error(f"SetDisplay service call failed: {e}, falling back to topic")
+            # 토픽으로 직접 발행 (서비스 클라이언트 호출 제거로 무한 루프 방지)
             self._fallback_to_topic_set_display(request, response)
+        except Exception as e:
+            response.success = False
+            response.message = f"Error: {str(e)}"
+            self.get_logger().error(f"Failed to set display: {e}")
         
         return response
     
@@ -268,27 +257,16 @@ class LCDControllerServer(Node):
         ClearDisplay 서비스 콜백
         LCD 화면을 지웁니다.
         
-        서비스 콜백 내부에서 다른 서비스를 호출하면 spin_once가 응답을 제대로 처리하지 못할 수 있습니다.
-        따라서 토픽을 통해 직접 전송합니다.
+        무한 루프 방지를 위해 서비스 클라이언트 호출을 제거하고,
+        토픽을 통해 직접 전송합니다.
         """
         try:
-            # 서비스 클라이언트로 호출 시도 (비동기, 응답 대기 안 함)
-            if self.clear_display_client.wait_for_service(timeout_sec=0.5):
-                self.get_logger().debug('Calling ClearDisplay service on pinky_lcd_display (async, no wait)')
-                # 비동기 호출만 하고 응답은 기다리지 않음
-                self.clear_display_client.call_async(request)
-                # 즉시 성공 응답 반환
-                response.success = True
-                response.message = "Clear display request sent (async)"
-                self.get_logger().info("ClearDisplay service call sent (async)")
-            else:
-                # 서비스가 없으면 토픽으로 폴백
-                self.get_logger().debug("ClearDisplay service not available, using topic")
-                self._fallback_to_topic_clear_display(request, response)
-            
-        except Exception as e:
-            self.get_logger().error(f"ClearDisplay service call failed: {e}, falling back to topic")
+            # 토픽으로 직접 발행 (서비스 클라이언트 호출 제거로 무한 루프 방지)
             self._fallback_to_topic_clear_display(request, response)
+        except Exception as e:
+            response.success = False
+            response.message = f"Error: {str(e)}"
+            self.get_logger().error(f"Failed to clear display: {e}")
         
         return response
     

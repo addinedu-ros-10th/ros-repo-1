@@ -1,0 +1,36 @@
+version: '3.8'
+
+# ROS2 환경을 사용하는 독립적인 docker-compose 설정
+# 사용 방법: docker-compose -f docker-compose.ros2.standalone.yml up -d
+# 
+# 전제 조건:
+# 1. 호스트에 ROS2가 설치되어 있음
+# 2. colcon build가 완료되어 있음
+# 3. LCD 컨트롤러 서버가 실행 중임 (ros2 run pinky_lcd_display_controller lcd_controller_server)
+#
+# 주의: 이 파일은 network_mode: "host"를 사용하므로 Redis와 Caddy는 별도로 실행해야 합니다.
+#       또는 Redis만 별도로 실행하고 Caddy는 사용하지 않을 수 있습니다.
+
+services:
+  # FastAPI 서버 (ROS2 환경)
+  ros2-api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ros2-api-server
+    # 호스트 네트워크 사용 (ROS2 DDS 접근)
+    network_mode: "host"
+    env_file:
+      - .env.local
+    volumes:
+      - ./logs:/app/logs
+      - ./src:/app/src
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      - ROS_DISTRO=${ROS_DISTRO:-humble}
+      - SERVER_PORT=${SERVER_PORT:-8004}  # 외부 포트 8004
+    restart: unless-stopped
+    # 주의: network_mode: "host"를 사용하면 ports, networks, depends_on 설정이 무시됩니다
+    #       서버는 호스트의 포트 8004를 직접 사용합니다 (또는 .env.local의 SERVER_PORT)
+
