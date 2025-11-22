@@ -1470,6 +1470,100 @@ async def get_voiceprints(
 
 # ============= WebSocket 실시간 통신 =============
 
+# WebSocket 연결 관리자 (배회 탐지 이벤트 브로드캐스트용)
+class ConnectionManager:
+    """WebSocket 연결 관리자"""
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket, check_origin: bool = True):
+        """
+        WebSocket 연결 수락
+        
+        Args:
+            websocket: WebSocket 연결 객체
+            check_origin: Origin 체크 여부 (기본값: True, 개발 환경에서는 False로 설정 가능)
+        """
+        try:
+            if check_origin:
+                # Origin 확인 및 허용 (CORS 대응)
+                origin = websocket.headers.get("origin")
+                allowed_origins = get_cors_origins()
+                
+                logger.debug(f"WebSocket 연결 시도: origin={origin}, allowed_origins={allowed_origins}")
+                
+                # Origin 체크 (개발 환경에서는 모든 origin 허용 가능)
+                if "*" not in allowed_origins and origin:
+                    # 특정 origin만 허용하는 경우 체크
+                    if origin not in allowed_origins:
+                        logger.warning(f"WebSocket 연결 거부: origin={origin} not in allowed_origins={allowed_origins}")
+                        await websocket.close(code=1008, reason="Origin not allowed")
+                        return
+            
+            # WebSocket 연결 수락
+            await websocket.accept()
+            self.active_connections.append(websocket)
+            logger.info(f"WebSocket 연결됨. 총 연결 수: {len(self.active_connections)}")
+        except Exception as e:
+            logger.error(f"WebSocket 연결 실패: {e}", exc_info=True)
+            raise
+    
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        logger.info(f"WebSocket 연결 해제됨. 총 연결 수: {len(self.active_connections)}")
+    
+    async def broadcast(self, message: dict):
+        """모든 연결된 클라이언트에게 메시지 브로드캐스트"""
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logger.warning(f"WebSocket 브로드캐스트 실패: {e}")
+                disconnected.append(connection)
+        
+        # 연결이 끊어진 클라이언트 제거
+        for connection in disconnected:
+            self.disconnect(connection)
+
+# 배회 탐지 이벤트 브로드캐스트용 연결 관리자
+wandering_detection_manager = ConnectionManager()
+
+
+@app.websocket("/ws/wandering-detection")
+async def websocket_wandering_detection(websocket: WebSocket):
+    """
+    배회 탐지 이벤트를 실시간으로 수신하는 WebSocket 엔드포인트
+    
+    클라이언트가 이 WebSocket에 연결하면, 배회 탐지가 발생할 때마다
+    자동으로 이벤트를 받을 수 있습니다.
+    
+    **이벤트 형식:**
+    ```json
+    {
+        "type": "wandering_detection",
+        "detection_id": "det_1234567890",
+        "detection_info": { ... },
+        "resident_found": true,
+        "guidance_messages": [ ... ],
+        "resident_info": { ... }
+    }
+    ```
+    """
+    # ConnectionManager에서 origin 체크 및 연결 수락
+    await wandering_detection_manager.connect(websocket, check_origin=True)
+    try:
+        while True:
+            # 클라이언트로부터 메시지 수신 (ping/pong 등)
+            data = await websocket.receive_text()
+            logger.debug(f"WebSocket 메시지 수신: {data}")
+    except WebSocketDisconnect:
+        wandering_detection_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket 오류: {e}", exc_info=True)
+        wandering_detection_manager.disconnect(websocket)
+
 
 @app.websocket("/ws/voice")
 async def websocket_voice_chat(websocket: WebSocket):
@@ -1946,6 +2040,169 @@ async def update_session_system_prompt(
     except Exception as e:
         logger.error(f"Failed to update session system prompt: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"System Prompt 업데이트 실패: {str(e)}")
+
+
+# ============= 테스트용 모킹 API =============
+
+class WanderingDetectionRequest(BaseModel):
+    """배회 탐지 시뮬레이션 요청"""
+    resident_name: Optional[str] = Field(None, description="어르신 성함")
+    nickname: Optional[str] = Field(None, description="어르신 nickname")
+    detection_location: Optional[str] = Field("복도", description="탐지 위치")
+
+
+@app.post("/api/test/wandering-detection", summary="배회 탐지 시뮬레이션 (테스트용)")
+async def simulate_wandering_detection(request: WanderingDetectionRequest):
+    """
+    어르신 배회 탐지를 시뮬레이션하는 테스트용 API
+    
+    이 API는 실제 배회 탐지 시스템을 모킹하여 안내 함수를 테스트할 수 있도록 합니다.
+    
+    **사용 예시:**
+    ```json
+    {
+        "nickname": "Akaza",
+        "detection_location": "1층 복도"
+    }
+    ```
+    
+    **응답:**
+    - 안내 메시지 및 어르신 정보 반환
+    """
+    try:
+        logger.info(f"Wandering detection simulation: nickname={request.nickname}, name={request.resident_name}, location={request.detection_location}")
+        
+        # 안내 함수 호출
+        result = await execute_function(
+            "guide_wandering_resident_to_room",
+            {
+                "resident_name": request.resident_name,
+                "nickname": request.nickname,
+                "detection_location": request.detection_location or "복도"
+            },
+            db_manager
+        )
+        
+        return {
+            "success": True,
+            "message": "배회 탐지 시뮬레이션 완료",
+            "detection_info": {
+                "resident_name": request.resident_name,
+                "nickname": request.nickname,
+                "detection_location": request.detection_location or "복도",
+                "detected_at": datetime.utcnow().isoformat()
+            },
+            "guidance_result": result
+        }
+    
+    except Exception as e:
+        logger.error(f"Error in wandering detection simulation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"배회 탐지 시뮬레이션 실패: {str(e)}")
+
+
+class WanderingDetectionRequestProduction(BaseModel):
+    """배회 탐지 요청 (운영용)"""
+    resident_name: Optional[str] = Field(None, description="어르신 성함")
+    nickname: Optional[str] = Field(None, description="어르신 nickname")
+    detection_location: str = Field(..., description="탐지 위치 (필수)")
+    detection_confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="탐지 신뢰도 (0.0~1.0)")
+    camera_id: Optional[str] = Field(None, description="카메라 ID")
+    timestamp: Optional[str] = Field(None, description="탐지 시간 (ISO 8601 형식)")
+
+
+@app.post("/api/wandering/detection", summary="배회 탐지 안내 (운영용)")
+async def wandering_detection(request: WanderingDetectionRequestProduction):
+    """
+    Deep Learning 기반 객체 탐지 시스템에서 어르신 배회를 탐지했을 때 호출하는 운영용 API
+    
+    이 API는 실제 운영 환경에서 사용되며, 탐지 정보를 받아 안내 메시지를 생성하고 TTS 오디오를 제공합니다.
+    
+    **사용 예시:**
+    ```json
+    {
+        "nickname": "Akaza",
+        "detection_location": "1층 복도",
+        "detection_confidence": 0.95,
+        "camera_id": "camera_001",
+        "timestamp": "2025-01-22T10:30:00Z"
+    }
+    ```
+    
+    **응답:**
+    - 안내 메시지 배열 (최소 3개)
+    - 어르신 정보
+    - TTS 오디오 생성 (선택사항)
+    """
+    try:
+        detection_id = f"det_{int(datetime.utcnow().timestamp() * 1000)}"
+        logger.info(f"Wandering detection (production): id={detection_id}, nickname={request.nickname}, name={request.resident_name}, location={request.detection_location}")
+        
+        # 안내 함수 호출
+        result = await execute_function(
+            "guide_wandering_resident_to_room",
+            {
+                "resident_name": request.resident_name,
+                "nickname": request.nickname,
+                "detection_location": request.detection_location
+            },
+            db_manager
+        )
+        
+        # TTS 오디오 생성 (안내 메시지가 있는 경우)
+        tts_audio_url = None
+        if result.get("success") and result.get("resident_found") and result.get("guidance_messages"):
+            try:
+                # 첫 번째 안내 메시지를 TTS로 변환
+                guidance_text = result["guidance_messages"][0] if result["guidance_messages"] else ""
+                if guidance_text:
+                    # TTS 요청 생성 (실제로는 별도 엔드포인트로 제공하거나 캐싱)
+                    tts_audio_url = f"/api/tts/audio/{detection_id}"
+            except Exception as e:
+                logger.warning(f"Failed to generate TTS audio URL: {e}")
+        
+        response_data = {
+            "success": True,
+            "detection_id": detection_id,
+            "detection_info": {
+                "resident_name": request.resident_name,
+                "nickname": request.nickname,
+                "detection_location": request.detection_location,
+                "detection_confidence": request.detection_confidence,
+                "camera_id": request.camera_id,
+                "timestamp": request.timestamp or datetime.utcnow().isoformat(),
+                "detected_at": datetime.utcnow().isoformat()
+            },
+            "resident_found": result.get("resident_found", False),
+            "guidance_messages": result.get("guidance_messages", []),
+            "resident_info": result.get("resident_info"),
+        }
+        
+        if tts_audio_url:
+            response_data["tts_audio_url"] = tts_audio_url
+        
+        # 생활실 정보 추가
+        if result.get("resident_info") and result["resident_info"].get("room"):
+            response_data["room_info"] = {
+                "room_number": result["resident_info"]["room"].get("room_number"),
+                "floor": result["resident_info"]["room"].get("floor"),
+                "building": result["resident_info"]["room"].get("building")
+            }
+        
+        # WebSocket으로 모든 연결된 클라이언트에게 브로드캐스트
+        try:
+            await wandering_detection_manager.broadcast({
+                "type": "wandering_detection",
+                **response_data
+            })
+            logger.info(f"배회 탐지 이벤트 브로드캐스트 완료: {detection_id}")
+        except Exception as e:
+            logger.warning(f"배회 탐지 이벤트 브로드캐스트 실패: {e}")
+        
+        return response_data
+    
+    except Exception as e:
+        logger.error(f"Error in wandering detection (production): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"배회 탐지 처리 실패: {str(e)}")
 
 
 @app.get("/", summary="Health Check")

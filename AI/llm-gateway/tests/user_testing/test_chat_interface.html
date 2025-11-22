@@ -477,6 +477,88 @@
                 transform: rotate(360deg);
             }
         }
+
+        /* 배회 탐지 알림 */
+        .detection-alert {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #ef4444;
+            color: white;
+            padding: 20px 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 2000;
+            max-width: 400px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .detection-alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .detection-alert-title {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .detection-alert-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.8;
+        }
+
+        .detection-alert-close:hover {
+            opacity: 1;
+        }
+
+        .detection-alert-content {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .detection-alert-info {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .message.detection {
+            background-color: #4a1e1e;
+            border-left: 4px solid #ef4444;
+        }
+
+        .message.detection .message-avatar {
+            background-color: #ef4444;
+        }
     </style>
 </head>
 <body>
@@ -487,6 +569,7 @@
                 <option value="">기본 프롬프트</option>
             </select>
             <button onclick="openPromptManager()">프롬프트 관리</button>
+            <button onclick="testWanderingDetection()" style="background-color: #ef4444;">🚨 배회 탐지 테스트</button>
             <div class="voice-toggle">
                 <input type="checkbox" id="voiceInterfaceToggle" onchange="toggleVoiceInterface()">
                 <label for="voiceInterfaceToggle">음성 인터페이스</label>
@@ -600,6 +683,72 @@
         let mediaRecorder = null;
         let audioChunks = [];
         let editingPromptId = null;
+        let wanderingDetectionWS = null; // 배회 탐지 WebSocket 연결
+        let userInteracted = false; // 사용자 상호작용 여부 (오디오 자동 재생용)
+        let audioContextActivated = false; // 오디오 컨텍스트 활성화 여부
+
+        // 오디오 컨텍스트 활성화 (자동 재생을 위해)
+        async function activateAudioContext() {
+            if (audioContextActivated) {
+                return true;
+            }
+
+            try {
+                // 빈 오디오를 생성하여 오디오 컨텍스트 활성화
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // 빈 오디오 버퍼 생성
+                const buffer = audioContext.createBuffer(1, 1, 22050);
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                source.start(0);
+                
+                // 오디오 컨텍스트 상태 확인
+                if (audioContext.state === 'running') {
+                    audioContextActivated = true;
+                    console.log('✅ 오디오 컨텍스트 활성화 완료 - 자동 재생 가능');
+                    return true;
+                } else {
+                    // suspended 상태인 경우 resume 시도
+                    await audioContext.resume();
+                    if (audioContext.state === 'running') {
+                        audioContextActivated = true;
+                        console.log('✅ 오디오 컨텍스트 활성화 완료 (resume) - 자동 재생 가능');
+                        return true;
+                    }
+                }
+            } catch (error) {
+                console.warn('⚠️ 오디오 컨텍스트 활성화 실패:', error);
+            }
+
+            return false;
+        }
+
+        // 사용자 상호작용 감지 및 오디오 컨텍스트 활성화
+        async function markUserInteraction() {
+            if (!userInteracted) {
+                userInteracted = true;
+                console.log('✅ 사용자 상호작용 감지 - 오디오 컨텍스트 활성화 시도');
+                await activateAudioContext();
+            }
+        }
+
+        // 페이지의 모든 클릭, 키 입력 등 상호작용 감지
+        document.addEventListener('click', markUserInteraction, { once: true });
+        document.addEventListener('keydown', markUserInteraction, { once: true });
+        document.addEventListener('touchstart', markUserInteraction, { once: true });
+        
+        // 페이지 로드 시 자동으로 오디오 컨텍스트 활성화 시도 (일부 브라우저에서 작동)
+        window.addEventListener('load', async () => {
+            // 약간의 지연 후 시도 (브라우저가 준비될 때까지)
+            setTimeout(async () => {
+                if (!audioContextActivated) {
+                    console.log('🔄 페이지 로드 후 오디오 컨텍스트 자동 활성화 시도');
+                    await activateAudioContext();
+                }
+            }, 1000);
+        });
 
         // 페이지 로드 시 초기화
         window.addEventListener('DOMContentLoaded', async () => {
@@ -607,6 +756,15 @@
             await loadLastUsedPrompt();
             document.getElementById('messageInput').disabled = false;
             document.getElementById('sendButton').disabled = false;
+            // 배회 탐지 WebSocket 연결
+            connectWanderingDetectionWS();
+        });
+
+        // 페이지 언로드 시 WebSocket 연결 해제
+        window.addEventListener('beforeunload', () => {
+            if (wanderingDetectionWS) {
+                wanderingDetectionWS.close();
+            }
         });
 
         // System Prompt 목록 로드
@@ -1353,6 +1511,429 @@
                 closePromptForm();
             }
         });
+
+        // ============= 배회 탐지 기능 =============
+
+        // 배회 탐지 테스트 함수
+        async function testWanderingDetection() {
+            // 테스트 데이터
+            const testData = {
+                nickname: "Zenitsu Agatsuma",
+                detection_location: "1층 복도",
+                detection_confidence: 0.95,
+                camera_id: "pinky_011",
+                timestamp: new Date().toISOString()
+            };
+
+            await handleWanderingDetection(testData);
+        }
+
+        // 배회 탐지 처리 함수
+        async function handleWanderingDetection(detectionData) {
+            try {
+                console.log('🚨 배회 탐지 처리 시작:', detectionData);
+
+                // API 호출
+                const response = await fetch(`${API_BASE}/api/wandering/detection`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'accept': 'application/json'
+                    },
+                    body: JSON.stringify(detectionData)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                console.log('✅ 배회 탐지 응답:', result);
+
+                if (result.success) {
+                    // 1. 채팅에 detection 메시지 추가
+                    addDetectionMessage(result);
+
+                    // 2. 알림 알러트 창 표시
+                    showDetectionAlert(result);
+
+                    // 3. 음성 안내 송출
+                    if (result.guidance_messages && result.guidance_messages.length > 0) {
+                        await playGuidanceAudio(result.guidance_messages);
+                    }
+                } else {
+                    console.error('❌ 배회 탐지 실패:', result);
+                    addMessage('assistant', '배회 탐지 처리 중 오류가 발생했습니다.');
+                }
+            } catch (error) {
+                console.error('❌ 배회 탐지 API 호출 실패:', error);
+                addMessage('assistant', `배회 탐지 처리 중 오류가 발생했습니다: ${error.message}`);
+            }
+        }
+
+        // 배회 탐지 메시지 추가
+        function addDetectionMessage(data) {
+            // WebSocket으로 받은 데이터 또는 API 응답 데이터 모두 처리 가능
+            const detectionInfo = data.detection_info || {};
+            const residentInfo = data.resident_info || {};
+            const guidanceMessages = data.guidance_messages || [];
+            const residentFound = data.resident_found !== undefined ? data.resident_found : true;
+
+            // 탐지 정보 메시지
+            let detectionText = `🚨 **배회 탐지 알림**\n\n`;
+            detectionText += `**탐지 정보:**\n`;
+            detectionText += `- 위치: ${detectionInfo.detection_location || '알 수 없음'}\n`;
+            if (detectionInfo.nickname) {
+                detectionText += `- 닉네임: ${detectionInfo.nickname}\n`;
+            }
+            if (detectionInfo.resident_name) {
+                detectionText += `- 성함: ${detectionInfo.resident_name}\n`;
+            }
+            if (detectionInfo.detection_confidence) {
+                detectionText += `- 신뢰도: ${(detectionInfo.detection_confidence * 100).toFixed(1)}%\n`;
+            }
+            if (detectionInfo.camera_id) {
+                detectionText += `- 카메라: ${detectionInfo.camera_id}\n`;
+            }
+
+            if (residentFound && residentInfo && residentInfo.room) {
+                detectionText += `\n**어르신 정보:**\n`;
+                detectionText += `- 생활실: ${residentInfo.room.room_number || '알 수 없음'}\n`;
+                if (residentInfo.room.floor) {
+                    detectionText += `- 층: ${residentInfo.room.floor}\n`;
+                }
+            }
+
+            if (guidanceMessages.length > 0) {
+                detectionText += `\n**안내 메시지:**\n`;
+                guidanceMessages.forEach((msg, index) => {
+                    detectionText += `${index + 1}. ${msg}\n`;
+                });
+            }
+
+            // detection 타입 메시지 추가
+            const container = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            const messageId = 'msg-detection-' + Date.now();
+            messageDiv.id = messageId;
+            messageDiv.className = 'message detection';
+
+            // 마크다운을 HTML로 변환
+            const htmlText = markdownToHtml(detectionText);
+
+            messageDiv.innerHTML = `
+                <div class="message-content">
+                    <div class="message-avatar">🚨</div>
+                    <div class="message-text">${htmlText}</div>
+                </div>
+            `;
+
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 마크다운을 HTML로 변환하는 간단한 함수
+        function markdownToHtml(text) {
+            if (!text) return '';
+            
+            // **텍스트** -> <strong>텍스트</strong>
+            text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            // *텍스트* -> <em>텍스트</em>
+            text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            // \n -> <br>
+            text = text.replace(/\n/g, '<br>');
+            
+            return text;
+        }
+
+        // 배회 탐지 알림 알러트 표시
+        function showDetectionAlert(data) {
+            // 기존 알림 제거
+            const existingAlert = document.querySelector('.detection-alert');
+            if (existingAlert) {
+                existingAlert.remove();
+            }
+
+            const detectionInfo = data.detection_info || {};
+            const residentInfo = data.resident_info || {};
+            const guidanceMessages = data.guidance_messages || [];
+            const residentFound = data.resident_found !== undefined ? data.resident_found : true;
+
+            // 알림 내용 구성 (HTML 태그 사용)
+            let alertContent = '';
+            if (detectionInfo.resident_name || detectionInfo.nickname) {
+                alertContent += `<strong>${escapeHtml(detectionInfo.resident_name || detectionInfo.nickname)}</strong> 어르신이 `;
+            } else {
+                alertContent += `어르신이 `;
+            }
+            alertContent += `<strong>${escapeHtml(detectionInfo.detection_location || '복도')}</strong>에서 배회가 탐지되었습니다.<br><br>`;
+
+            if (residentFound && residentInfo && residentInfo.room) {
+                alertContent += `생활실: <strong>${escapeHtml(residentInfo.room.room_number || '알 수 없음')}</strong>로 안내합니다.`;
+            }
+
+            if (guidanceMessages.length > 0) {
+                alertContent += `<br><br>안내 메시지가 음성으로 송출됩니다.`;
+            }
+
+            // 알림 DOM 생성 (innerHTML 사용하여 HTML 렌더링)
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'detection-alert';
+            alertDiv.innerHTML = `
+                <div class="detection-alert-header">
+                    <div class="detection-alert-title">
+                        🚨 배회 탐지 알림
+                    </div>
+                    <button class="detection-alert-close" onclick="this.parentElement.parentElement.remove()">×</button>
+                </div>
+                <div class="detection-alert-content">${alertContent}</div>
+                <div class="detection-alert-info">
+                    ${detectionInfo.camera_id ? `카메라: ${escapeHtml(detectionInfo.camera_id)} | ` : ''}
+                    ${detectionInfo.detection_confidence ? `신뢰도: ${(detectionInfo.detection_confidence * 100).toFixed(1)}% | ` : ''}
+                    ${new Date(detectionInfo.detected_at || Date.now()).toLocaleTimeString('ko-KR')}
+                </div>
+            `;
+
+            document.body.appendChild(alertDiv);
+
+            // 5초 후 자동 제거 (선택사항)
+            setTimeout(() => {
+                if (alertDiv.parentElement) {
+                    alertDiv.style.animation = 'slideIn 0.3s ease-out reverse';
+                    setTimeout(() => alertDiv.remove(), 300);
+                }
+            }, 10000);
+        }
+
+        // 안내 메시지 음성 송출 (비상 안내 - 체크박스와 무관하게 항상 재생)
+        async function playGuidanceAudio(guidanceMessages) {
+            try {
+                // 모든 안내 메시지를 하나로 합치기
+                const fullGuidanceText = guidanceMessages.join('\n\n');
+
+                console.log('🔊 [비상 안내] TTS 변환 시작:', fullGuidanceText.substring(0, 100) + '...');
+
+                // TTS API 호출
+                const ttsResponse = await fetch(`${API_BASE}/api/tts`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: fullGuidanceText,
+                        voice: 'nova', // 부드럽고 친근한 음성
+                        model: 'tts-1'
+                    })
+                });
+
+                if (!ttsResponse.ok) {
+                    const errorText = await ttsResponse.text();
+                    throw new Error(`TTS API error! status: ${ttsResponse.status}, message: ${errorText}`);
+                }
+
+                // 오디오 스트림 받기
+                const audioBlob = await ttsResponse.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                const audio = new Audio(audioUrl);
+
+                // 재생 완료 후 URL 정리
+                audio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    console.log('🔊 [비상 안내] 음성 송출 완료');
+                };
+
+                // 오류 처리
+                audio.onerror = (error) => {
+                    console.error('❌ [비상 안내] 오디오 재생 오류:', error);
+                    URL.revokeObjectURL(audioUrl);
+                };
+
+                // 음성 재생 (체크박스와 무관하게 항상 재생)
+                try {
+                    // 오디오 컨텍스트가 활성화되지 않았다면 활성화 시도
+                    if (!audioContextActivated) {
+                        console.log('🔄 [비상 안내] 오디오 컨텍스트 활성화 시도');
+                        await activateAudioContext();
+                    }
+
+                    // 오디오 재생 시도
+                    const playPromise = audio.play();
+                    
+                    if (playPromise !== undefined) {
+                        await playPromise;
+                        console.log('🔊 [비상 안내] 음성 송출 시작 (자동 재생 성공)');
+                    }
+                } catch (playError) {
+                    console.error('❌ [비상 안내] 오디오 재생 실패:', playError);
+                    
+                    // 브라우저 자동 재생 정책으로 인한 실패 시
+                    if (playError.name === 'NotAllowedError' || playError.name === 'NotSupportedError') {
+                        // 추가 시도: 오디오 컨텍스트를 다시 활성화하고 재시도
+                        console.log('🔄 [비상 안내] 오디오 컨텍스트 재활성화 및 재시도');
+                        audioContextActivated = false;
+                        const reactivated = await activateAudioContext();
+                        
+                        if (reactivated) {
+                            // 재활성화 성공 시 다시 재생 시도
+                            try {
+                                await audio.play();
+                                console.log('🔊 [비상 안내] 음성 송출 시작 (재활성화 후 성공)');
+                                return; // 성공했으므로 함수 종료
+                            } catch (retryError) {
+                                console.error('❌ [비상 안내] 재활성화 후에도 재생 실패:', retryError);
+                            }
+                        }
+                        
+                        // 모든 시도 실패 시 사용자에게 알림 표시 (비상 안내이므로)
+                        const alertDiv = document.createElement('div');
+                        alertDiv.className = 'detection-alert';
+                        alertDiv.style.background = '#ff6b6b';
+                        alertDiv.style.position = 'fixed';
+                        alertDiv.style.top = '50%';
+                        alertDiv.style.left = '50%';
+                        alertDiv.style.transform = 'translate(-50%, -50%)';
+                        alertDiv.style.zIndex = '3000';
+                        alertDiv.style.padding = '20px';
+                        alertDiv.style.borderRadius = '12px';
+                        alertDiv.style.maxWidth = '400px';
+                        alertDiv.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+                        alertDiv.innerHTML = `
+                            <div style="color: white; text-align: center;">
+                                <h3 style="margin-bottom: 10px; font-size: 18px;">🚨 비상 안내 음성 재생</h3>
+                                <p style="margin-bottom: 15px; font-size: 14px;">브라우저 자동 재생 정책으로 인해 음성이 자동 재생되지 않았습니다.</p>
+                                <p style="margin-bottom: 15px; font-size: 14px;">아래 버튼을 클릭하여 음성을 재생하세요.</p>
+                                <button onclick="
+                                    const audio = new Audio('${audioUrl}');
+                                    audio.play().then(() => {
+                                        this.parentElement.parentElement.remove();
+                                    }).catch(e => {
+                                        alert('음성 재생 실패: ' + e.message);
+                                    });
+                                " style="background: white; color: #ff6b6b; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; margin-right: 10px;">
+                                    🔊 음성 재생
+                                </button>
+                                <button onclick="this.parentElement.parentElement.remove()" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 14px;">
+                                    닫기
+                                </button>
+                            </div>
+                        `;
+                        document.body.appendChild(alertDiv);
+                        
+                        // 30초 후 자동 제거
+                        setTimeout(() => {
+                            if (alertDiv.parentElement) {
+                                alertDiv.remove();
+                            }
+                        }, 30000);
+                    } else {
+                        // 기타 오류
+                        console.error('❌ [비상 안내] 알 수 없는 오디오 재생 오류:', playError);
+                    }
+                }
+
+            } catch (error) {
+                console.error('❌ [비상 안내] TTS 변환 실패:', error);
+                // TTS 실패해도 채팅 메시지는 이미 표시되었으므로 계속 진행
+                // 하지만 비상 안내이므로 사용자에게 알림
+                const errorAlert = document.createElement('div');
+                errorAlert.className = 'detection-alert';
+                errorAlert.style.background = '#ff6b6b';
+                errorAlert.style.position = 'fixed';
+                errorAlert.style.top = '20px';
+                errorAlert.style.right = '20px';
+                errorAlert.style.zIndex = '3000';
+                errorAlert.innerHTML = `
+                    <div style="color: white; padding: 15px;">
+                        <strong>⚠️ 비상 안내 음성 송출 실패</strong><br>
+                        <small>${error.message || '알 수 없는 오류'}</small>
+                        <button onclick="this.parentElement.parentElement.remove()" style="float: right; background: rgba(255,255,255,0.2); color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-top: 10px;">
+                            닫기
+                        </button>
+                    </div>
+                `;
+                document.body.appendChild(errorAlert);
+                
+                setTimeout(() => {
+                    if (errorAlert.parentElement) {
+                        errorAlert.remove();
+                    }
+                }, 10000);
+            }
+        }
+
+        // 배회 탐지 WebSocket 연결
+        function connectWanderingDetectionWS() {
+            try {
+                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${wsProtocol}//${window.location.host}/ws/wandering-detection`;
+                
+                console.log('🔌 배회 탐지 WebSocket 연결 시도:', wsUrl);
+                
+                wanderingDetectionWS = new WebSocket(wsUrl);
+                
+                wanderingDetectionWS.onopen = () => {
+                    console.log('✅ 배회 탐지 WebSocket 연결 성공');
+                };
+                
+                wanderingDetectionWS.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('📨 배회 탐지 이벤트 수신:', data);
+                        
+                        if (data.type === 'wandering_detection') {
+                            // 자동으로 배회 탐지 처리
+                            handleWanderingDetectionEvent(data);
+                        }
+                    } catch (error) {
+                        console.error('❌ 배회 탐지 이벤트 파싱 실패:', error);
+                    }
+                };
+                
+                wanderingDetectionWS.onerror = (error) => {
+                    console.error('❌ 배회 탐지 WebSocket 오류:', error);
+                };
+                
+                wanderingDetectionWS.onclose = () => {
+                    console.log('🔌 배회 탐지 WebSocket 연결 종료. 3초 후 재연결 시도...');
+                    // 3초 후 재연결 시도
+                    setTimeout(() => {
+                        connectWanderingDetectionWS();
+                    }, 3000);
+                };
+            } catch (error) {
+                console.error('❌ 배회 탐지 WebSocket 연결 실패:', error);
+                // 5초 후 재시도
+                setTimeout(() => {
+                    connectWanderingDetectionWS();
+                }, 5000);
+            }
+        }
+
+        // WebSocket으로 받은 배회 탐지 이벤트 처리
+        async function handleWanderingDetectionEvent(data) {
+            try {
+                console.log('🚨 배회 탐지 이벤트 처리 시작:', data);
+
+                // 1. 채팅에 detection 메시지 추가
+                addDetectionMessage(data);
+
+                // 2. 알림 알러트 창 표시
+                showDetectionAlert(data);
+
+                // 3. 음성 안내 송출 (비상 안내이므로 체크박스와 무관하게 항상 재생)
+                if (data.guidance_messages && data.guidance_messages.length > 0) {
+                    console.log('🔊 [비상 안내] WebSocket 이벤트로부터 음성 안내 시작');
+                    await playGuidanceAudio(data.guidance_messages);
+                }
+            } catch (error) {
+                console.error('❌ 배회 탐지 이벤트 처리 실패:', error);
+            }
+        }
+
+        // 외부에서 배회 탐지 이벤트를 받을 수 있도록 전역 함수로 노출
+        window.handleWanderingDetection = handleWanderingDetection;
+        window.testWanderingDetection = testWanderingDetection;
+        window.handleWanderingDetectionEvent = handleWanderingDetectionEvent;
     </script>
 </body>
 </html>
