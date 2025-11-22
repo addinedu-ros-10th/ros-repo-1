@@ -5,7 +5,7 @@ FastAPI 엔드포인트의 요청/응답 모델을 정의합니다.
 """
 
 from datetime import datetime, date
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, EmailStr, Field, validator, ConfigDict
 from uuid import UUID
 
@@ -26,9 +26,11 @@ class UserBase(BaseModel):
         if v is not None:
             # 전화번호 형식 검증 (한국 전화번호)
             import re
+            # 하이픈 제거 후 검증
+            phone_cleaned = v.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
             # 01012345678 형식 허용 (11자리)
             phone_pattern = re.compile(r'^01[0-9]{8,9}$')
-            if not phone_pattern.match(v):
+            if not phone_pattern.match(phone_cleaned):
                 raise ValueError('올바른 전화번호 형식이 아닙니다')
         return v
 
@@ -56,9 +58,11 @@ class UserUpdate(BaseModel):
     def validate_phone_number(cls, v):
         if v is not None:
             import re
+            # 하이픈 제거 후 검증
+            phone_cleaned = v.replace('-', '').replace(' ', '').replace('(', '').replace(')', '')
             # 01012345678 형식 허용 (11자리)
             phone_pattern = re.compile(r'^01[0-9]{8,9}$')
-            if not phone_pattern.match(v):
+            if not phone_pattern.match(phone_cleaned):
                 raise ValueError('올바른 전화번호 형식이 아닙니다')
         return v
 
@@ -1442,4 +1446,142 @@ class SensorEventButtonListResponse(BaseModel):
     total: int
     page: int
     size: int
-    pages: int 
+    pages: int
+
+
+# ============================================================================
+# 요양원 내부 입소자 관리 정보 스키마
+# ============================================================================
+
+class ResidentInfoBase(BaseModel):
+    """요양원 내부 입소자 관리 정보 기본 스키마"""
+    # 기본 정보 (users 테이블과 동일)
+    user_name: Optional[str] = Field(None, max_length=100, description="사용자 이름 (users.user_name과 동일)")
+    email: Optional[EmailStr] = Field(None, description="이메일 주소 (users.email과 동일)")
+    phone_number: Optional[str] = Field(None, max_length=20, description="전화번호 (users.phone_number과 동일)")
+    
+    # 입소 관리 정보
+    resident_number: Optional[str] = Field(None, max_length=20, description="요양원 내부 관리 번호")
+    nickname: Optional[str] = Field(None, max_length=50, description="애칭")
+    admission_date: date = Field(..., description="입소일")
+    discharge_date: Optional[date] = Field(None, description="퇴소일")
+    room_number: Optional[str] = Field(None, max_length=20, description="생활실 번호")
+    floor_number: Optional[int] = Field(None, description="층수")
+    bed_number: Optional[str] = Field(None, max_length=10, description="침대 번호")
+    adl_level: Optional[str] = Field("independent", description="ADL 수준")
+    mobility_level: Optional[str] = Field(None, description="이동 수준")
+    cognitive_level: Optional[str] = Field(None, description="인지 수준")
+    medication_schedule: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = Field(None, description="복약 일정 (JSON - 리스트 또는 딕셔너리)")
+    medication_notes: Optional[str] = Field(None, description="복약 특이사항")
+    special_notes: Optional[Dict[str, Any]] = Field(None, description="특이사항 (JSON)")
+    incidents: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = Field(None, description="사건/사고 기록 (JSON - 리스트 또는 딕셔너리)")
+    dietary_restrictions: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = Field(None, description="식이 제한 (JSON - 리스트 또는 딕셔너리)")
+    emergency_contacts: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = Field(None, description="응급 연락처 (JSON - 리스트 또는 딕셔너리)")
+    insurance_info: Optional[Dict[str, Any]] = Field(None, description="보험 정보 (JSON)")
+    medical_facility_info: Optional[Dict[str, Any]] = Field(None, description="의료 기관 정보 (JSON)")
+    care_level: Optional[str] = Field(None, max_length=20, description="요양 등급")
+    guardian_name: Optional[str] = Field(None, max_length=100, description="보호자 이름")
+    guardian_relationship: Optional[str] = Field(None, max_length=50, description="보호자 관계")
+    guardian_phone: Optional[str] = Field(None, max_length=20, description="보호자 전화번호")
+
+    @validator('adl_level')
+    def validate_adl_level(cls, v):
+        if v and v not in ['independent', 'partial_assistance', 'full_assistance']:
+            raise ValueError('adl_level은 independent, partial_assistance, full_assistance 중 하나여야 합니다')
+        return v
+
+    @validator('mobility_level')
+    def validate_mobility_level(cls, v):
+        if v and v not in ['independent', 'walker', 'wheelchair', 'bedridden']:
+            raise ValueError('mobility_level은 independent, walker, wheelchair, bedridden 중 하나여야 합니다')
+        return v
+
+    @validator('cognitive_level')
+    def validate_cognitive_level(cls, v):
+        if v and v not in ['normal', 'mild_impairment', 'moderate_impairment', 'severe_impairment']:
+            raise ValueError('cognitive_level은 normal, mild_impairment, moderate_impairment, severe_impairment 중 하나여야 합니다')
+        return v
+
+
+class ResidentInfoCreate(ResidentInfoBase):
+    """요양원 내부 입소자 관리 정보 생성 스키마"""
+    pass
+
+
+class ResidentInfoUpdate(BaseModel):
+    """요양원 내부 입소자 관리 정보 수정 스키마"""
+    resident_number: Optional[str] = Field(None, max_length=20)
+    nickname: Optional[str] = Field(None, max_length=50)
+    discharge_date: Optional[date] = Field(None)
+    room_number: Optional[str] = Field(None, max_length=20)
+    floor_number: Optional[int] = Field(None)
+    bed_number: Optional[str] = Field(None, max_length=10)
+    adl_level: Optional[str] = Field(None)
+    mobility_level: Optional[str] = Field(None)
+    cognitive_level: Optional[str] = Field(None)
+    medication_schedule: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = Field(None)
+    medication_notes: Optional[str] = Field(None)
+    special_notes: Optional[Dict[str, Any]] = Field(None)
+    incidents: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = Field(None)
+    dietary_restrictions: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = Field(None)
+    emergency_contacts: Optional[Union[Dict[str, Any], List[Dict[str, Any]]]] = Field(None)
+    insurance_info: Optional[Dict[str, Any]] = Field(None)
+    medical_facility_info: Optional[Dict[str, Any]] = Field(None)
+    care_level: Optional[str] = Field(None, max_length=20)
+    guardian_name: Optional[str] = Field(None, max_length=100)
+    guardian_relationship: Optional[str] = Field(None, max_length=50)
+    guardian_phone: Optional[str] = Field(None, max_length=20)
+
+    @validator('adl_level')
+    def validate_adl_level(cls, v):
+        if v and v not in ['independent', 'partial_assistance', 'full_assistance']:
+            raise ValueError('adl_level은 independent, partial_assistance, full_assistance 중 하나여야 합니다')
+        return v
+
+    @validator('mobility_level')
+    def validate_mobility_level(cls, v):
+        if v and v not in ['independent', 'walker', 'wheelchair', 'bedridden']:
+            raise ValueError('mobility_level은 independent, walker, wheelchair, bedridden 중 하나여야 합니다')
+        return v
+
+    @validator('cognitive_level')
+    def validate_cognitive_level(cls, v):
+        if v and v not in ['normal', 'mild_impairment', 'moderate_impairment', 'severe_impairment']:
+            raise ValueError('cognitive_level은 normal, mild_impairment, moderate_impairment, severe_impairment 중 하나여야 합니다')
+        return v
+
+
+class ResidentInfoResponse(ResidentInfoBase):
+    """요양원 내부 입소자 관리 정보 응답 스키마"""
+    user_id: UUID
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+        orm_mode = True
+
+
+class ResidentInfoListResponse(BaseModel):
+    """요양원 내부 입소자 관리 정보 목록 응답 스키마"""
+    residents: List[ResidentInfoResponse]
+    total: int
+    page: int
+    size: int
+    pages: int
+
+
+class IncidentCreate(BaseModel):
+    """사건/사고 기록 생성 스키마"""
+    incident_date: date = Field(..., description="사건/사고 발생일")
+    incident_type: str = Field(..., description="사건/사고 유형")
+    location: Optional[str] = Field(None, description="발생 장소")
+    severity: Optional[str] = Field(None, description="심각도")
+    description: Optional[str] = Field(None, description="상세 설명")
+    action_taken: Optional[str] = Field(None, description="조치 사항")
+    preventive_measures: Optional[str] = Field(None, description="예방 조치")
+
+
+class MedicationScheduleUpdate(BaseModel):
+    """복약 일정 업데이트 스키마"""
+    schedule: List[Dict[str, Any]] = Field(..., description="복약 일정 리스트")

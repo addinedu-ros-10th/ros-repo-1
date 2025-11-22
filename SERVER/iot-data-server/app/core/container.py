@@ -13,6 +13,7 @@ from app.interfaces.repositories.user_repository import IUserRepository
 from app.interfaces.repositories.device_repository import IDeviceRepository
 from app.interfaces.repositories.user_relationship_repository import IUserRelationshipRepository
 from app.interfaces.repositories.user_profile_repository import IUserProfileRepository
+from app.interfaces.repositories.resident_info_repository import IResidentInfoRepository
 from app.interfaces.repositories.home_state_snapshot_repository import IHomeStateSnapshotRepository
 from app.interfaces.repositories.sensor_event_button_repository import ISensorEventButtonRepository
 from app.interfaces.repositories.sensor_raw_temperature_repository import ISensorRawTemperatureRepository
@@ -39,6 +40,7 @@ from app.interfaces.repositories.device_rtc_repository import IDeviceRTCStatusRe
 from app.interfaces.services.user_service_interface import IUserService
 from app.interfaces.services.user_relationship_service_interface import IUserRelationshipService
 from app.interfaces.services.user_profile_service_interface import IUserProfileService
+from app.interfaces.services.resident_info_service_interface import IResidentInfoService
 from app.interfaces.services.home_state_snapshot_service_interface import IHomeStateSnapshotService
 from app.interfaces.services.sensor_event_button_service_interface import ISensorEventButtonService
 from app.interfaces.services.sensor_raw_temperature_service_interface import ISensorRawTemperatureService
@@ -294,6 +296,17 @@ class DependencyContainer:
         from app.use_cases.user_profile_service import UserProfileService
         user_profile_repository = self.get_user_profile_repository(db_session)
         return UserProfileService(user_profile_repository)
+    
+    def get_resident_info_repository(self, db_session: AsyncSession) -> IResidentInfoRepository:
+        """요양원 내부 입소자 관리 정보 리포지토리 제공"""
+        from app.infrastructure.repositories.resident_info_repository import ResidentInfoRepository
+        return ResidentInfoRepository(db_session)
+    
+    def get_resident_info_service(self, db_session: AsyncSession) -> IResidentInfoService:
+        """요양원 내부 입소자 관리 정보 서비스 제공"""
+        from app.use_cases.resident_info_service import ResidentInfoService
+        resident_info_repository = self.get_resident_info_repository(db_session)
+        return ResidentInfoService(resident_info_repository)
 
     def get_home_state_snapshot_repository(self) -> IHomeStateSnapshotRepository:
         """홈 상태 스냅샷 리포지토리 의존성 주입"""
@@ -505,7 +518,15 @@ def get_user_relationship_service(db_session: AsyncSession = Depends(get_db_sess
 
 def get_user_profile_service(db_session: AsyncSession = Depends(get_db_session)) -> IUserProfileService:
     """사용자 프로필 서비스 의존성 주입"""
-    return container.get_user_profile_service(db_session) 
+    return container.get_user_profile_service(db_session)
+
+def get_resident_info_repository(db_session: AsyncSession = Depends(get_db_session)) -> IResidentInfoRepository:
+    """요양원 내부 입소자 관리 정보 리포지토리 의존성 주입"""
+    return container.get_resident_info_repository(db_session)
+
+def get_resident_info_service(db_session: AsyncSession = Depends(get_db_session)) -> IResidentInfoService:
+    """요양원 내부 입소자 관리 정보 서비스 의존성 주입"""
+    return container.get_resident_info_service(db_session) 
 
 # 홈 상태 스냅샷 의존성 주입 함수
 def get_home_state_snapshot_repository() -> IHomeStateSnapshotRepository:

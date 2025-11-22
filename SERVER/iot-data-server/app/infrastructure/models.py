@@ -31,6 +31,7 @@ class User(Base):
     relationships_as_subject: Mapped[List["UserRelationship"]] = relationship("UserRelationship", foreign_keys="UserRelationship.subject_user_id", back_populates="subject_user")
     relationships_as_target: Mapped[List["UserRelationship"]] = relationship("UserRelationship", foreign_keys="UserRelationship.target_user_id", back_populates="target_user")
     profile: Mapped[Optional["UserProfile"]] = relationship("UserProfile", back_populates="user", uselist=False)
+    resident_info: Mapped[Optional["ResidentInfo"]] = relationship("ResidentInfo", back_populates="user", uselist=False)
     home_state_snapshots: Mapped[List["HomeStateSnapshot"]] = relationship("HomeStateSnapshot", back_populates="user")
 
 
@@ -323,6 +324,69 @@ class UserProfile(Base):
     
     # 관계 정의
     user: Mapped["User"] = relationship("User", back_populates="profile")
+
+
+class ResidentInfo(Base):
+    """요양원 내부 입소자 관리 정보 ORM 모델"""
+    __tablename__ = "residents"
+    
+    user_id: Mapped[str] = Column(PostgresUUID, ForeignKey("users.user_id"), primary_key=True)
+    
+    # 기본 정보 (users 테이블과 동일한 정보)
+    user_name: Mapped[Optional[str]] = Column(Text, nullable=True, comment="사용자 이름 (users.user_name과 동일)")
+    email: Mapped[Optional[str]] = Column(Text, nullable=True, comment="이메일 주소 (users.email과 동일)")
+    phone_number: Mapped[Optional[str]] = Column(Text, nullable=True, comment="전화번호 (users.phone_number과 동일)")
+    
+    # 입소 관리 정보
+    resident_number: Mapped[Optional[str]] = Column(String(20), nullable=True, unique=True)
+    nickname: Mapped[Optional[str]] = Column(String(50), nullable=True)
+    admission_date: Mapped[date] = Column(Date, nullable=False)
+    discharge_date: Mapped[Optional[date]] = Column(Date, nullable=True)
+    
+    # 생활실 정보
+    room_number: Mapped[Optional[str]] = Column(String(20), nullable=True)
+    floor_number: Mapped[Optional[int]] = Column(Integer, nullable=True)
+    bed_number: Mapped[Optional[str]] = Column(String(10), nullable=True)
+    
+    # ADL (일상생활 활동) 수준
+    adl_level: Mapped[Optional[str]] = Column(String(20), nullable=True, default="independent")
+    mobility_level: Mapped[Optional[str]] = Column(String(20), nullable=True)
+    cognitive_level: Mapped[Optional[str]] = Column(String(20), nullable=True)
+    
+    # 복약 관리
+    medication_schedule: Mapped[Optional[dict]] = Column(JSONB, nullable=True)
+    medication_notes: Mapped[Optional[str]] = Column(Text, nullable=True)
+    
+    # 특이사항 (건강, 정서, 심리 등)
+    special_notes: Mapped[Optional[dict]] = Column(JSONB, nullable=True)
+    
+    # 사건/사고 기록
+    incidents: Mapped[Optional[dict]] = Column(JSONB, nullable=True)
+    
+    # 식이 제한
+    dietary_restrictions: Mapped[Optional[dict]] = Column(JSONB, nullable=True)
+    
+    # 응급 연락처
+    emergency_contacts: Mapped[Optional[dict]] = Column(JSONB, nullable=True)
+    
+    # 보험 정보
+    insurance_info: Mapped[Optional[dict]] = Column(JSONB, nullable=True)
+    
+    # 의료 기관 연계 정보
+    medical_facility_info: Mapped[Optional[dict]] = Column(JSONB, nullable=True)
+    
+    # 기타 관리 정보
+    care_level: Mapped[Optional[str]] = Column(String(20), nullable=True)
+    guardian_name: Mapped[Optional[str]] = Column(String(100), nullable=True)
+    guardian_relationship: Mapped[Optional[str]] = Column(String(50), nullable=True)
+    guardian_phone: Mapped[Optional[str]] = Column(String(20), nullable=True)
+    
+    # 메타데이터
+    created_at: Mapped[Optional[datetime]] = Column(DateTime(timezone=True), nullable=True, default=datetime.utcnow)
+    updated_at: Mapped[Optional[datetime]] = Column(DateTime(timezone=True), nullable=True, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # 관계 정의
+    user: Mapped["User"] = relationship("User", back_populates="resident_info")
 
 
 class HomeStateSnapshot(Base):

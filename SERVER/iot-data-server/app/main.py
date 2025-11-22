@@ -13,6 +13,16 @@ from app.core.config import settings
 from app.api import api_router
 from app.infrastructure.database import create_tables
 
+# 모든 ORM 모델을 명시적으로 임포트하여 테이블 생성 시 포함되도록 함
+from app.infrastructure.models import (
+    User,
+    Device,
+    UserProfile,
+    UserRelationship,
+    ResidentInfo,  # residents 테이블 생성에 필요
+    # 기타 모델들도 필요시 추가
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

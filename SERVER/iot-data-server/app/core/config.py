@@ -28,12 +28,20 @@ class Settings(BaseSettings):
     
     @property
     def DATABASE_URL(self) -> str:
-        """데이터베이스 URL을 동적으로 생성합니다."""
+        """
+        데이터베이스 URL을 동적으로 생성합니다.
+        
+        주의: env 파일(.env.local)에 설정된 DB_HOST 값을 그대로 사용합니다.
+        임의로 값을 변경하지 않습니다.
+        """
         from urllib.parse import quote_plus
+        
+        # env 파일에서 읽은 DB_HOST 값을 그대로 사용 (임의로 변경하지 않음)
+        db_host = self.DB_HOST
         
         # 비밀번호에 포함된 특수문자를 URL 인코딩
         encoded_password = quote_plus(self.DB_PASSWORD)
-        return f"postgresql://{self.DB_USER}:{encoded_password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        return f"postgresql://{self.DB_USER}:{encoded_password}@{db_host}:{self.DB_PORT}/{self.DB_NAME}"
     
     # Redis 설정
     REDIS_URL: str = Field(..., env="REDIS_URL")
