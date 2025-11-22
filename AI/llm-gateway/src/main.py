@@ -24,6 +24,7 @@ import tempfile
 import aiofiles
 import logging
 from datetime import datetime
+import uuid
 
 from .config import settings, get_cors_origins
 from .redis_session import redis_session_manager
@@ -41,7 +42,8 @@ from .database import (
     CustomizedMobileConversationMessage,
     PsychologicalCounselingAnalysis,
     CounselingReport,
-    DeepLearningFunctionStatus
+    DeepLearningFunctionStatus,
+    ConversationSession
 )
 from .tools import TOOLS, execute_function
 from .psychological_analysis import analyze_conversation_messages, save_psychological_analysis
@@ -1587,7 +1589,6 @@ async def websocket_voice_chat(websocket: WebSocket):
     - 서버 → 클라이언트: `{"type": "content", "content": "안녕하세요"}`
     """
     await websocket.accept()
-    
     # 세션 ID 처리: 쿼리 파라미터에서 가져오거나 새로 생성
     import uuid
     session_id = websocket.query_params.get("session_id")
@@ -1716,6 +1717,19 @@ async def get_session(session_id: str):
     """특정 세션의 대화 히스토리를 조회합니다."""
     messages = []
     
+    # DB에서 먼저 조회
+    if db_manager._initialized:
+        try:
+            messages = load_conversation_from_db(session_id)
+            if messages:
+                return {
+                    "success": True,
+                    "session_id": session_id,
+                    "messages": messages
+                }
+        except Exception as e:
+            logger.warning(f"Failed to load session from DB: {e}")
+    
     # Redis에서 조회
     try:
         messages = await redis_session_manager.get_session(session_id)
@@ -1733,6 +1747,249 @@ async def get_session(session_id: str):
             "messages": messages
         }
     return {"success": False, "message": "세션을 찾을 수 없음"}
+
+
+# ============= 세션 관리 API (어르신 기준) =============
+
+class SessionCreateRequest(BaseModel):
+    """세션 생성 요청"""
+    name: Optional[str] = Field(None, description="어르신 이름")
+    nickname: Optional[str] = Field(None, description="어르신 nickname")
+    user_id: Optional[str] = Field(None, description="사용자 ID")
+
+
+class SessionUpdateRequest(BaseModel):
+    """세션 업데이트 요청"""
+    name: Optional[str] = Field(None, description="어르신 이름")
+    nickname: Optional[str] = Field(None, description="어르신 nickname")
+    user_id: Optional[str] = Field(None, description="사용자 ID")
+
+
+class SessionResponse(BaseModel):
+    """세션 응답"""
+    session_id: str
+    name: Optional[str] = None
+    nickname: Optional[str] = None
+    user_id: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+@app.get("/api/sessions", summary="세션 목록 조회")
+async def list_sessions():
+    """모든 세션 목록을 조회합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            sessions = session.query(ConversationSession)\
+                .order_by(ConversationSession.updated_at.desc())\
+                .all()
+            
+            return {
+                "success": True,
+                "sessions": [
+                    {
+                        "session_id": s.session_id,
+                        "name": s.name,
+                        "nickname": s.nickname,
+                        "user_id": s.user_id,
+                        "created_at": s.created_at.isoformat() if s.created_at else None,
+                        "updated_at": s.updated_at.isoformat() if s.updated_at else None
+                    }
+                    for s in sessions
+                ]
+            }
+    except Exception as e:
+        logger.error(f"Failed to list sessions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"세션 목록 조회 실패: {str(e)}")
+
+
+@app.post("/api/sessions", summary="세션 생성")
+async def create_session(request: SessionCreateRequest):
+    """새 세션을 생성합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        # 세션 ID 생성
+        session_id = f"session-{datetime.utcnow().timestamp()}-{uuid.uuid4().hex[:8]}"
+        
+        with db_manager.get_session() as session:
+            # 기존 세션 확인 (이름/nickname 기준)
+            existing_session = None
+            if request.nickname:
+                existing_session = session.query(ConversationSession)\
+                    .filter_by(nickname=request.nickname)\
+                    .first()
+            elif request.name:
+                existing_session = session.query(ConversationSession)\
+                    .filter_by(name=request.name)\
+                    .first()
+            
+            if existing_session:
+                # 기존 세션 반환
+                return {
+                    "success": True,
+                    "session_id": existing_session.session_id,
+                    "name": existing_session.name,
+                    "nickname": existing_session.nickname,
+                    "user_id": existing_session.user_id,
+                    "created_at": existing_session.created_at.isoformat() if existing_session.created_at else None,
+                    "updated_at": existing_session.updated_at.isoformat() if existing_session.updated_at else None,
+                    "existing": True
+                }
+            
+            # 새 세션 생성
+            new_session = ConversationSession(
+                session_id=session_id,
+                name=request.name,
+                nickname=request.nickname,
+                user_id=request.user_id
+            )
+            session.add(new_session)
+            session.commit()
+            session.refresh(new_session)
+            
+            return {
+                "success": True,
+                "session_id": new_session.session_id,
+                "name": new_session.name,
+                "nickname": new_session.nickname,
+                "user_id": new_session.user_id,
+                "created_at": new_session.created_at.isoformat() if new_session.created_at else None,
+                "updated_at": new_session.updated_at.isoformat() if new_session.updated_at else None,
+                "existing": False
+            }
+    except Exception as e:
+        logger.error(f"Failed to create session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"세션 생성 실패: {str(e)}")
+
+
+@app.put("/api/sessions/{session_id}", summary="세션 업데이트")
+async def update_session(session_id: str, request: SessionUpdateRequest):
+    """세션 정보를 업데이트합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            db_session = session.query(ConversationSession).filter_by(session_id=session_id).first()
+            if not db_session:
+                raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+            
+            # 업데이트
+            if request.name is not None:
+                db_session.name = request.name
+            if request.nickname is not None:
+                db_session.nickname = request.nickname
+            if request.user_id is not None:
+                db_session.user_id = request.user_id
+            
+            db_session.updated_at = datetime.utcnow()
+            session.commit()
+            session.refresh(db_session)
+            
+            return {
+                "success": True,
+                "session_id": db_session.session_id,
+                "name": db_session.name,
+                "nickname": db_session.nickname,
+                "user_id": db_session.user_id,
+                "created_at": db_session.created_at.isoformat() if db_session.created_at else None,
+                "updated_at": db_session.updated_at.isoformat() if db_session.updated_at else None
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"세션 업데이트 실패: {str(e)}")
+
+
+@app.get("/api/sessions/find", summary="이름/nickname으로 세션 찾기")
+async def find_session_by_name(
+    name: Optional[str] = Query(None, description="어르신 이름"),
+    nickname: Optional[str] = Query(None, description="어르신 nickname")
+):
+    """이름 또는 nickname으로 세션을 찾습니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    if not name and not nickname:
+        raise HTTPException(status_code=400, detail="name 또는 nickname 중 하나는 필수입니다")
+    
+    try:
+        with db_manager.get_session() as session:
+            query = session.query(ConversationSession)
+            
+            # nickname 우선 검색
+            if nickname:
+                db_session = query.filter_by(nickname=nickname).first()
+            elif name:
+                db_session = query.filter_by(name=name).first()
+            else:
+                db_session = None
+            
+            if db_session:
+                return {
+                    "success": True,
+                    "session_id": db_session.session_id,
+                    "name": db_session.name,
+                    "nickname": db_session.nickname,
+                    "user_id": db_session.user_id,
+                    "created_at": db_session.created_at.isoformat() if db_session.created_at else None,
+                    "updated_at": db_session.updated_at.isoformat() if db_session.updated_at else None
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "세션을 찾을 수 없습니다"
+                }
+    except Exception as e:
+        logger.error(f"Failed to find session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"세션 검색 실패: {str(e)}")
+
+
+@app.delete("/api/sessions/{session_id}", summary="세션 삭제")
+async def delete_session_api(session_id: str):
+    """세션을 삭제합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            db_session = session.query(ConversationSession).filter_by(session_id=session_id).first()
+            if not db_session:
+                raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+            
+            # 메시지도 함께 삭제
+            from .database import ConversationMessage
+            session.query(ConversationMessage).filter_by(session_id=session_id).delete()
+            
+            # 세션 삭제
+            session.delete(db_session)
+            session.commit()
+            
+            # Redis에서도 삭제
+            try:
+                await redis_session_manager.delete_session(session_id)
+            except Exception:
+                pass
+            
+            # Fallback에서도 삭제
+            if session_id in fallback_store:
+                del fallback_store[session_id]
+            
+            return {
+                "success": True,
+                "message": f"세션 {session_id} 삭제됨"
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"세션 삭제 실패: {str(e)}")
 
 
 # ============= System Prompt 엔드포인트 =============

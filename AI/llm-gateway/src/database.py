@@ -32,6 +32,8 @@ class ConversationSession(Base):
     
     session_id = Column(String(255), primary_key=True, index=True)
     user_id = Column(String(255), index=True, nullable=True)  # 사용자 ID (향후 확장용)
+    name = Column(String(255), nullable=True)  # 어르신 이름
+    nickname = Column(String(255), nullable=True, index=True)  # 어르신 nickname
     system_prompt = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -39,6 +41,8 @@ class ConversationSession(Base):
     # 인덱스
     __table_args__ = (
         Index('idx_user_created', 'user_id', 'created_at'),
+        Index('idx_nickname', 'nickname'),
+        Index('idx_name', 'name'),
     )
 
 
@@ -495,6 +499,14 @@ class DatabaseManager:
             created_tables = existing_tables_after - existing_tables_before
             missing_tables = required_tables - existing_tables_after
             
+            # 기존 테이블 마이그레이션 (컬럼 추가 등) - 테이블이 존재하는 경우에만
+            if 'conversation_sessions' in existing_tables_after:
+                logger.info("Running migration for existing conversation_sessions table...")
+                try:
+                    self._migrate_existing_tables()
+                except Exception as e:
+                    logger.warning(f"Migration error (non-critical): {e}")
+            
             # 누락된 테이블이 있으면 SQL로 직접 생성
             if missing_tables:
                 logger.warning(f"Missing tables detected after create_all(): {missing_tables}")
@@ -750,6 +762,68 @@ class DatabaseManager:
             logger.warning(f"Error granting permissions: {e}", exc_info=True)
             print(f"⚠ Error granting permissions: {e}")
     
+    def _migrate_existing_tables(self):
+        """기존 테이블에 누락된 컬럼 추가 (마이그레이션)"""
+        from sqlalchemy import text
+        
+        try:
+            with self.engine.connect() as conn:
+                # conversation_sessions 테이블 마이그레이션
+                # name 컬럼 추가
+                try:
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns 
+                                WHERE table_name = 'conversation_sessions' 
+                                AND column_name = 'name'
+                            ) THEN
+                                ALTER TABLE conversation_sessions ADD COLUMN name VARCHAR(255);
+                            END IF;
+                        END $$;
+                    """))
+                    conn.commit()
+                    logger.info("✅ Added 'name' column to conversation_sessions")
+                except Exception as e:
+                    logger.debug(f"name column migration: {e}")
+                
+                # nickname 컬럼 추가
+                try:
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns 
+                                WHERE table_name = 'conversation_sessions' 
+                                AND column_name = 'nickname'
+                            ) THEN
+                                ALTER TABLE conversation_sessions ADD COLUMN nickname VARCHAR(255);
+                            END IF;
+                        END $$;
+                    """))
+                    conn.commit()
+                    logger.info("✅ Added 'nickname' column to conversation_sessions")
+                except Exception as e:
+                    logger.debug(f"nickname column migration: {e}")
+                
+                # 인덱스 추가
+                try:
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_nickname ON conversation_sessions(nickname)"))
+                    conn.commit()
+                    logger.debug("✅ Added idx_nickname index")
+                except Exception as e:
+                    logger.debug(f"idx_nickname index: {e}")
+                
+                try:
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_name ON conversation_sessions(name)"))
+                    conn.commit()
+                    logger.debug("✅ Added idx_name index")
+                except Exception as e:
+                    logger.debug(f"idx_name index: {e}")
+        except Exception as e:
+            logger.warning(f"Table migration error: {e}", exc_info=True)
+    
     def _create_missing_tables(self, missing_tables: set):
         """누락된 테이블을 개별적으로 생성 시도"""
         from sqlalchemy import text
@@ -761,12 +835,16 @@ class DatabaseManager:
                     CREATE TABLE IF NOT EXISTS conversation_sessions (
                         session_id VARCHAR(255) PRIMARY KEY,
                         user_id VARCHAR(255),
+                        name VARCHAR(255),
+                        nickname VARCHAR(255),
                         system_prompt TEXT,
                         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                     )
                 """),
-                text("CREATE INDEX IF NOT EXISTS idx_user_created ON conversation_sessions(user_id, created_at)")
+                text("CREATE INDEX IF NOT EXISTS idx_user_created ON conversation_sessions(user_id, created_at)"),
+                text("CREATE INDEX IF NOT EXISTS idx_nickname ON conversation_sessions(nickname)"),
+                text("CREATE INDEX IF NOT EXISTS idx_name ON conversation_sessions(name)")
             ],
             'conversation_messages': [
                 text("""
@@ -1102,7 +1180,7 @@ db_manager = DatabaseManager()
 
 # ============= 편의 함수 =============
 
-def save_conversation_to_db(session_id: str, messages: List[Dict[str, str]], system_prompt: Optional[str] = None):
+def save_conversation_to_db(session_id: str, messages: List[Dict[str, str]], system_prompt: Optional[str] = None, name: Optional[str] = None, nickname: Optional[str] = None, user_id: Optional[str] = None):
     """대화 히스토리를 DB에 저장"""
     if not db_manager._initialized:
         logger.debug("Database not initialized, skipping conversation save")
@@ -1115,11 +1193,23 @@ def save_conversation_to_db(session_id: str, messages: List[Dict[str, str]], sys
             if not db_session:
                 db_session = ConversationSession(
                     session_id=session_id,
+                    user_id=user_id,
+                    name=name,
+                    nickname=nickname,
                     system_prompt=system_prompt or settings.default_system_prompt
                 )
                 session.add(db_session)
                 logger.debug(f"Created new conversation session: {session_id}")
             else:
+                # 기존 세션이 있으면 메타데이터 업데이트
+                if system_prompt:
+                    db_session.system_prompt = system_prompt
+                if name is not None:
+                    db_session.name = name
+                if nickname is not None:
+                    db_session.nickname = nickname
+                if user_id is not None:
+                    db_session.user_id = user_id
                 db_session.updated_at = datetime.utcnow()
                 logger.debug(f"Updated conversation session: {session_id}")
             
