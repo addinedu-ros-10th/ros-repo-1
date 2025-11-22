@@ -1,0 +1,69 @@
+# Caddy 설정 파일
+# 자체 서명 인증서 발급 및 적용
+
+# ============================================
+# 전역 설정 (반드시 첫 번째에 위치)
+# ============================================
+{
+    # 이메일 (Let's Encrypt 인증서 갱신 알림용 - 향후 사용)
+    email your-email@example.com
+    
+    # 자체 서명 인증서 사용
+    local_certs
+}
+
+# ============================================
+# 도메인을 사용하는 경우 (운영 환경 권장)
+# ============================================
+# 아래 주석을 해제하고 도메인을 입력하세요:
+#
+# your-domain.com {
+#     reverse_proxy llm-gateway:8000 {
+#         # WebSocket 지원
+#         header_up X-Real-IP {remote_host}
+#         header_up X-Forwarded-For {remote_host}
+#         header_up X-Forwarded-Proto {scheme}
+#         
+#         # WebSocket 업그레이드 헤더
+#         header_up Connection {>Connection}
+#         header_up Upgrade {>Upgrade}
+#     }
+# }
+#
+# # HTTP를 HTTPS로 리다이렉트
+# http://your-domain.com {
+#     redir https://{host}{uri} permanent
+# }
+
+# ============================================
+# IP 주소로 접속하는 경우 (개발/테스트용)
+# ============================================
+# 자체 서명 인증서 사용 (브라우저 경고 발생)
+# Let's Encrypt는 IP 주소에 대해 인증서를 발급하지 않으므로
+# IP 주소 접속 시에는 자체 서명 인증서를 사용합니다.
+
+# HTTPS 서버 (모든 호스트 허용)
+:443 {
+    # 자체 서명 인증서 사용
+    tls internal
+    
+    # 리버스 프록시
+    reverse_proxy llm-gateway:8000 {
+        # WebSocket 지원
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        
+        # WebSocket 업그레이드 헤더
+        header_up Connection {>Connection}
+        header_up Upgrade {>Upgrade}
+        
+        # 헤더 전달
+        header_down -Server
+    }
+}
+
+# HTTP를 HTTPS로 리다이렉트
+:80 {
+    redir https://{host}{uri} permanent
+}

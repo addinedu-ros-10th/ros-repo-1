@@ -88,6 +88,48 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_resident_info",
+            "description": "요양원 입소자(어르신)의 상세 정보를 조회합니다. 사용자가 '입소자 정보', '어르신 정보', '요양원 정보', '입소자 상세', '어르신 상세', '복약 일정', '응급 연락처', '의료 정보', '보험 정보', '생활실 정보', 'ADL 수준', '이동 수준', '인지 수준', '특이사항', '사건/사고 기록', '식이 제한' 등을 요청할 때 반드시 이 함수를 호출하세요. user_id 파라미터가 필요합니다. 이 함수는 입소자의 모든 정보(입소 정보, 생활실, 복약 일정, 특이사항, 응급 연락처, 보험 정보, 의료 기관 정보 등)를 포함합니다.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user_id": {
+                        "type": "string",
+                        "description": "조회할 입소자(어르신)의 UUID (예: '00000000-0000-0000-0000-000000000001')"
+                    }
+                },
+                "required": ["user_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "guide_wandering_resident_to_room",
+            "description": "순찰 중 어르신 배회가 탐지된 경우 생활관 복귀를 안내합니다. 어르신의 성함 또는 nickname을 기반으로 정보를 조회하고, 친절한 안내 메시지를 최소 3회 반복하여 전달합니다. 사용자가 '배회 탐지', '어르신 복도에 있음', '생활실로 안내', '복귀 안내', '어르신이 복도에 계심', '배회 중인 어르신 발견' 등을 언급할 때 반드시 이 함수를 호출하세요. resident_name 또는 nickname 중 하나는 반드시 제공되어야 합니다.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "resident_name": {
+                        "type": "string",
+                        "description": "어르신의 성함 (예: '정도현', '한기문'). nickname이 없을 때 사용합니다."
+                    },
+                    "nickname": {
+                        "type": "string",
+                        "description": "어르신의 nickname (예: 'Akaza', 'Gyomei Himejima'). nickname이 있으면 우선적으로 사용합니다."
+                    },
+                    "detection_location": {
+                        "type": "string",
+                        "description": "배회 탐지 위치 (예: '1층 복도', '2층 로비', '3층 계단'). 선택사항입니다."
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "control_door",
             "description": "문을 열거나 닫습니다. 사용자가 '문 열어줘', '문 열기', '문 열림', '문 닫아줘', '문 닫기', '문 닫힘', '문을 열어주세요', '문을 닫아주세요' 등을 요청할 때 반드시 이 함수를 호출하세요. 두 개의 서보 모터를 동시에 제어하여 문을 열거나 닫습니다.",
             "parameters": {
@@ -196,6 +238,20 @@ async def execute_function(function_name: str, arguments: Dict[str, Any], db_man
                 return {"error": "user_id is required"}
             relationship_type = arguments.get("relationship_type", "as-target")
             return await _get_user_relationships(user_id, relationship_type)
+        
+        elif function_name == "get_resident_info":
+            user_id = arguments.get("user_id")
+            if not user_id:
+                return {"error": "user_id is required"}
+            return await _get_resident_info(user_id)
+        
+        elif function_name == "guide_wandering_resident_to_room":
+            resident_name = arguments.get("resident_name")
+            nickname = arguments.get("nickname")
+            detection_location = arguments.get("detection_location", "복도")
+            if not resident_name and not nickname:
+                return {"error": "resident_name 또는 nickname 중 하나는 필수입니다."}
+            return await _guide_wandering_resident_to_room(resident_name, nickname, detection_location)
         
         elif function_name == "control_door":
             action = arguments.get("action")
@@ -422,6 +478,222 @@ async def _get_user_relationships(user_id: str, relationship_type: str = "as-tar
     except Exception as e:
         logger.error(f"Error calling get_user_relationships: {e}", exc_info=True)
         return {
+            "error": str(e),
+            "type": type(e).__name__
+        }
+
+
+async def _get_resident_info(user_id: str) -> Dict[str, Any]:
+    """
+    요양원 입소자(어르신) 상세 정보 조회 API 호출
+    
+    Args:
+        user_id: 입소자(어르신) UUID
+    
+    Returns:
+        API 응답 결과 (입소자 정보, 복약 일정, 특이사항, 응급 연락처, 보험 정보 등 포함)
+    """
+    try:
+        url = f"{API_BASE_URL}/api/residents/{user_id}"
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                url,
+                headers={"accept": "application/json"}
+            )
+            
+            response.raise_for_status()
+            
+            return {
+                "success": True,
+                "status_code": response.status_code,
+                "data": response.json(),
+                "url": str(response.url)
+            }
+    
+    except httpx.TimeoutException:
+        return {
+            "error": "Request timeout",
+            "url": url,
+            "timeout": "10 seconds"
+        }
+    
+    except httpx.HTTPStatusError as e:
+        return {
+            "error": f"HTTP error: {e.response.status_code}",
+            "status_code": e.response.status_code,
+            "response": e.response.text[:500] if e.response.text else None
+        }
+    
+    except httpx.ConnectError:
+        return {
+            "error": "Connection error",
+            "url": url,
+            "message": "Could not connect to the server"
+        }
+    
+    except Exception as e:
+        logger.error(f"Error calling get_resident_info: {e}", exc_info=True)
+        return {
+            "error": str(e),
+            "type": type(e).__name__
+        }
+
+
+async def _search_residents(keyword: str) -> Dict[str, Any]:
+    """
+    키워드로 입소자 정보 검색 API 호출
+    
+    Args:
+        keyword: 검색 키워드 (nickname, user_name, resident_number 등)
+    
+    Returns:
+        API 응답 결과 (입소자 목록)
+    """
+    try:
+        url = f"{API_BASE_URL}/api/residents/search/{keyword}"
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(
+                url,
+                headers={"accept": "application/json"}
+            )
+            
+            response.raise_for_status()
+            
+            return {
+                "success": True,
+                "status_code": response.status_code,
+                "data": response.json(),
+                "url": str(response.url)
+            }
+    
+    except httpx.TimeoutException:
+        return {
+            "error": "Request timeout",
+            "url": url,
+            "timeout": "10 seconds"
+        }
+    
+    except httpx.HTTPStatusError as e:
+        return {
+            "error": f"HTTP error: {e.response.status_code}",
+            "status_code": e.response.status_code,
+            "response": e.response.text[:500] if e.response.text else None
+        }
+    
+    except httpx.ConnectError:
+        return {
+            "error": "Connection error",
+            "url": url,
+            "message": "Could not connect to the server"
+        }
+    
+    except Exception as e:
+        logger.error(f"Error calling search_residents: {e}", exc_info=True)
+        return {
+            "error": str(e),
+            "type": type(e).__name__
+        }
+
+
+async def _guide_wandering_resident_to_room(
+    resident_name: Optional[str] = None,
+    nickname: Optional[str] = None,
+    detection_location: str = "복도"
+) -> Dict[str, Any]:
+    """
+    배회 탐지된 어르신을 생활실로 안내하는 함수
+    
+    Args:
+        resident_name: 어르신 성함
+        nickname: 어르신 nickname
+        detection_location: 탐지 위치
+    
+    Returns:
+        안내 메시지 및 어르신 정보
+    """
+    try:
+        # 1. nickname 우선으로 검색
+        search_keyword = None
+        if nickname:
+            search_keyword = nickname
+            logger.info(f"Searching resident by nickname: {nickname}")
+        elif resident_name:
+            search_keyword = resident_name
+            logger.info(f"Searching resident by name: {resident_name}")
+        else:
+            return {
+                "success": False,
+                "error": "resident_name 또는 nickname 중 하나는 필수입니다."
+            }
+        
+        # 2. 입소자 검색
+        search_result = await _search_residents(search_keyword)
+        
+        if not search_result.get("success") or not search_result.get("data"):
+            return {
+                "success": False,
+                "error": f"어르신 정보를 찾을 수 없습니다. (검색어: {search_keyword})",
+                "search_keyword": search_keyword
+            }
+        
+        residents = search_result["data"]
+        if not residents or len(residents) == 0:
+            return {
+                "success": False,
+                "error": f"어르신 정보를 찾을 수 없습니다. (검색어: {search_keyword})",
+                "search_keyword": search_keyword
+            }
+        
+        # 3. 첫 번째 결과 선택 (또는 가장 일치하는 결과)
+        resident = residents[0]
+        
+        # 4. 생활실 정보 추출
+        user_name = resident.get("user_name", "어르신")
+        resident_nickname = resident.get("nickname") or user_name
+        room_number = resident.get("room_number", "알 수 없음")
+        floor_number = resident.get("floor_number", "알 수 없음")
+        bed_number = resident.get("bed_number", "")
+        
+        # 5. 안내 메시지 생성 (3회 반복)
+        guidance_messages = []
+        
+        # 1회차: 친절한 인사와 상황 설명
+        message1 = f"안녕하세요, {resident_nickname} 어르신! 지금 {detection_location}에서 어르신을 발견했습니다. 어르신의 생활실은 {floor_number}층 {room_number}호"
+        if bed_number:
+            message1 += f" {bed_number}번 침대"
+        message1 += "입니다. 안전을 위해 생활실로 복귀해 주시겠어요?"
+        guidance_messages.append(message1)
+        
+        # 2회차: 상황 재확인 및 복귀 안내
+        message2 = f"{user_name} 어르신, 지금 {detection_location}에 계시는 것으로 보입니다. {floor_number}층 {room_number}호 생활실로 돌아가 주시면 감사하겠습니다. 혼자 계시면 위험할 수 있으니 생활실로 복귀해 주세요."
+        guidance_messages.append(message2)
+        
+        # 3회차: 함께 안내 제안
+        message3 = f"어르신, {resident_nickname} 어르신! 지금 {detection_location}에 계신 것으로 탐지되었습니다. 생활실은 {floor_number}층 {room_number}호입니다. 제가 함께 생활실로 안내해 드릴까요? 안전을 위해 생활실로 복귀해 주시기 바랍니다."
+        guidance_messages.append(message3)
+        
+        return {
+            "success": True,
+            "resident_info": {
+                "user_id": resident.get("user_id"),
+                "user_name": user_name,
+                "nickname": resident_nickname,
+                "room_number": room_number,
+                "floor_number": floor_number,
+                "bed_number": bed_number,
+                "resident_number": resident.get("resident_number")
+            },
+            "guidance_messages": guidance_messages,
+            "detection_location": detection_location,
+            "message": f"{resident_nickname} 어르신의 생활실 복귀 안내 메시지가 생성되었습니다."
+        }
+    
+    except Exception as e:
+        logger.error(f"Error in guide_wandering_resident_to_room: {e}", exc_info=True)
+        return {
+            "success": False,
             "error": str(e),
             "type": type(e).__name__
         }

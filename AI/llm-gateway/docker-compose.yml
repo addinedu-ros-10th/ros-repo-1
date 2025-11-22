@@ -8,7 +8,9 @@ services:
       dockerfile: Dockerfile
     container_name: llm-gateway
     ports:
-      - "${SERVER_PORT:-8001}:8000"
+      - "${SERVER_PORT:-8001}:8000"  # 외부 포트 8001 유지 (직접 접속용)
+    expose:
+      - "8000"  # Caddy가 내부 네트워크로 접근하기 위한 포트
     # environment:
     #   # OpenAI API 설정
     #   - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -112,7 +114,29 @@ services:
     networks:
       - llm-gateway-network
 
+  # Caddy 리버스 프록시 (SSL/TLS 자동 적용)
+  caddy:
+    image: caddy:2-alpine
+    container_name: llm-gateway-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3 지원
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - llm-gateway
+    restart: unless-stopped
+    networks:
+      - llm-gateway-network
+
 volumes:
+  caddy-data:
+    driver: local
+  caddy-config:
+    driver: local
   redis-data:
     driver: local
 

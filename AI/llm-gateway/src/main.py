@@ -24,6 +24,7 @@ import tempfile
 import aiofiles
 import logging
 from datetime import datetime
+import uuid
 
 from .config import settings, get_cors_origins
 from .redis_session import redis_session_manager
@@ -41,7 +42,8 @@ from .database import (
     CustomizedMobileConversationMessage,
     PsychologicalCounselingAnalysis,
     CounselingReport,
-    DeepLearningFunctionStatus
+    DeepLearningFunctionStatus,
+    ConversationSession
 )
 from .tools import TOOLS, execute_function
 from .psychological_analysis import analyze_conversation_messages, save_psychological_analysis
@@ -1470,6 +1472,100 @@ async def get_voiceprints(
 
 # ============= WebSocket 실시간 통신 =============
 
+# WebSocket 연결 관리자 (배회 탐지 이벤트 브로드캐스트용)
+class ConnectionManager:
+    """WebSocket 연결 관리자"""
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket, check_origin: bool = True):
+        """
+        WebSocket 연결 수락
+        
+        Args:
+            websocket: WebSocket 연결 객체
+            check_origin: Origin 체크 여부 (기본값: True, 개발 환경에서는 False로 설정 가능)
+        """
+        try:
+            if check_origin:
+                # Origin 확인 및 허용 (CORS 대응)
+                origin = websocket.headers.get("origin")
+                allowed_origins = get_cors_origins()
+                
+                logger.debug(f"WebSocket 연결 시도: origin={origin}, allowed_origins={allowed_origins}")
+                
+                # Origin 체크 (개발 환경에서는 모든 origin 허용 가능)
+                if "*" not in allowed_origins and origin:
+                    # 특정 origin만 허용하는 경우 체크
+                    if origin not in allowed_origins:
+                        logger.warning(f"WebSocket 연결 거부: origin={origin} not in allowed_origins={allowed_origins}")
+                        await websocket.close(code=1008, reason="Origin not allowed")
+                        return
+            
+            # WebSocket 연결 수락
+            await websocket.accept()
+            self.active_connections.append(websocket)
+            logger.info(f"WebSocket 연결됨. 총 연결 수: {len(self.active_connections)}")
+        except Exception as e:
+            logger.error(f"WebSocket 연결 실패: {e}", exc_info=True)
+            raise
+    
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        logger.info(f"WebSocket 연결 해제됨. 총 연결 수: {len(self.active_connections)}")
+    
+    async def broadcast(self, message: dict):
+        """모든 연결된 클라이언트에게 메시지 브로드캐스트"""
+        disconnected = []
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logger.warning(f"WebSocket 브로드캐스트 실패: {e}")
+                disconnected.append(connection)
+        
+        # 연결이 끊어진 클라이언트 제거
+        for connection in disconnected:
+            self.disconnect(connection)
+
+# 배회 탐지 이벤트 브로드캐스트용 연결 관리자
+wandering_detection_manager = ConnectionManager()
+
+
+@app.websocket("/ws/wandering-detection")
+async def websocket_wandering_detection(websocket: WebSocket):
+    """
+    배회 탐지 이벤트를 실시간으로 수신하는 WebSocket 엔드포인트
+    
+    클라이언트가 이 WebSocket에 연결하면, 배회 탐지가 발생할 때마다
+    자동으로 이벤트를 받을 수 있습니다.
+    
+    **이벤트 형식:**
+    ```json
+    {
+        "type": "wandering_detection",
+        "detection_id": "det_1234567890",
+        "detection_info": { ... },
+        "resident_found": true,
+        "guidance_messages": [ ... ],
+        "resident_info": { ... }
+    }
+    ```
+    """
+    # ConnectionManager에서 origin 체크 및 연결 수락
+    await wandering_detection_manager.connect(websocket, check_origin=True)
+    try:
+        while True:
+            # 클라이언트로부터 메시지 수신 (ping/pong 등)
+            data = await websocket.receive_text()
+            logger.debug(f"WebSocket 메시지 수신: {data}")
+    except WebSocketDisconnect:
+        wandering_detection_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket 오류: {e}", exc_info=True)
+        wandering_detection_manager.disconnect(websocket)
+
 
 @app.websocket("/ws/voice")
 async def websocket_voice_chat(websocket: WebSocket):
@@ -1493,7 +1589,6 @@ async def websocket_voice_chat(websocket: WebSocket):
     - 서버 → 클라이언트: `{"type": "content", "content": "안녕하세요"}`
     """
     await websocket.accept()
-    
     # 세션 ID 처리: 쿼리 파라미터에서 가져오거나 새로 생성
     import uuid
     session_id = websocket.query_params.get("session_id")
@@ -1622,6 +1717,19 @@ async def get_session(session_id: str):
     """특정 세션의 대화 히스토리를 조회합니다."""
     messages = []
     
+    # DB에서 먼저 조회
+    if db_manager._initialized:
+        try:
+            messages = load_conversation_from_db(session_id)
+            if messages:
+                return {
+                    "success": True,
+                    "session_id": session_id,
+                    "messages": messages
+                }
+        except Exception as e:
+            logger.warning(f"Failed to load session from DB: {e}")
+    
     # Redis에서 조회
     try:
         messages = await redis_session_manager.get_session(session_id)
@@ -1639,6 +1747,249 @@ async def get_session(session_id: str):
             "messages": messages
         }
     return {"success": False, "message": "세션을 찾을 수 없음"}
+
+
+# ============= 세션 관리 API (어르신 기준) =============
+
+class SessionCreateRequest(BaseModel):
+    """세션 생성 요청"""
+    name: Optional[str] = Field(None, description="어르신 이름")
+    nickname: Optional[str] = Field(None, description="어르신 nickname")
+    user_id: Optional[str] = Field(None, description="사용자 ID")
+
+
+class SessionUpdateRequest(BaseModel):
+    """세션 업데이트 요청"""
+    name: Optional[str] = Field(None, description="어르신 이름")
+    nickname: Optional[str] = Field(None, description="어르신 nickname")
+    user_id: Optional[str] = Field(None, description="사용자 ID")
+
+
+class SessionResponse(BaseModel):
+    """세션 응답"""
+    session_id: str
+    name: Optional[str] = None
+    nickname: Optional[str] = None
+    user_id: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+@app.get("/api/sessions", summary="세션 목록 조회")
+async def list_sessions():
+    """모든 세션 목록을 조회합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            sessions = session.query(ConversationSession)\
+                .order_by(ConversationSession.updated_at.desc())\
+                .all()
+            
+            return {
+                "success": True,
+                "sessions": [
+                    {
+                        "session_id": s.session_id,
+                        "name": s.name,
+                        "nickname": s.nickname,
+                        "user_id": s.user_id,
+                        "created_at": s.created_at.isoformat() if s.created_at else None,
+                        "updated_at": s.updated_at.isoformat() if s.updated_at else None
+                    }
+                    for s in sessions
+                ]
+            }
+    except Exception as e:
+        logger.error(f"Failed to list sessions: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"세션 목록 조회 실패: {str(e)}")
+
+
+@app.post("/api/sessions", summary="세션 생성")
+async def create_session(request: SessionCreateRequest):
+    """새 세션을 생성합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        # 세션 ID 생성
+        session_id = f"session-{datetime.utcnow().timestamp()}-{uuid.uuid4().hex[:8]}"
+        
+        with db_manager.get_session() as session:
+            # 기존 세션 확인 (이름/nickname 기준)
+            existing_session = None
+            if request.nickname:
+                existing_session = session.query(ConversationSession)\
+                    .filter_by(nickname=request.nickname)\
+                    .first()
+            elif request.name:
+                existing_session = session.query(ConversationSession)\
+                    .filter_by(name=request.name)\
+                    .first()
+            
+            if existing_session:
+                # 기존 세션 반환
+                return {
+                    "success": True,
+                    "session_id": existing_session.session_id,
+                    "name": existing_session.name,
+                    "nickname": existing_session.nickname,
+                    "user_id": existing_session.user_id,
+                    "created_at": existing_session.created_at.isoformat() if existing_session.created_at else None,
+                    "updated_at": existing_session.updated_at.isoformat() if existing_session.updated_at else None,
+                    "existing": True
+                }
+            
+            # 새 세션 생성
+            new_session = ConversationSession(
+                session_id=session_id,
+                name=request.name,
+                nickname=request.nickname,
+                user_id=request.user_id
+            )
+            session.add(new_session)
+            session.commit()
+            session.refresh(new_session)
+            
+            return {
+                "success": True,
+                "session_id": new_session.session_id,
+                "name": new_session.name,
+                "nickname": new_session.nickname,
+                "user_id": new_session.user_id,
+                "created_at": new_session.created_at.isoformat() if new_session.created_at else None,
+                "updated_at": new_session.updated_at.isoformat() if new_session.updated_at else None,
+                "existing": False
+            }
+    except Exception as e:
+        logger.error(f"Failed to create session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"세션 생성 실패: {str(e)}")
+
+
+@app.put("/api/sessions/{session_id}", summary="세션 업데이트")
+async def update_session(session_id: str, request: SessionUpdateRequest):
+    """세션 정보를 업데이트합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            db_session = session.query(ConversationSession).filter_by(session_id=session_id).first()
+            if not db_session:
+                raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+            
+            # 업데이트
+            if request.name is not None:
+                db_session.name = request.name
+            if request.nickname is not None:
+                db_session.nickname = request.nickname
+            if request.user_id is not None:
+                db_session.user_id = request.user_id
+            
+            db_session.updated_at = datetime.utcnow()
+            session.commit()
+            session.refresh(db_session)
+            
+            return {
+                "success": True,
+                "session_id": db_session.session_id,
+                "name": db_session.name,
+                "nickname": db_session.nickname,
+                "user_id": db_session.user_id,
+                "created_at": db_session.created_at.isoformat() if db_session.created_at else None,
+                "updated_at": db_session.updated_at.isoformat() if db_session.updated_at else None
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"세션 업데이트 실패: {str(e)}")
+
+
+@app.get("/api/sessions/find", summary="이름/nickname으로 세션 찾기")
+async def find_session_by_name(
+    name: Optional[str] = Query(None, description="어르신 이름"),
+    nickname: Optional[str] = Query(None, description="어르신 nickname")
+):
+    """이름 또는 nickname으로 세션을 찾습니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    if not name and not nickname:
+        raise HTTPException(status_code=400, detail="name 또는 nickname 중 하나는 필수입니다")
+    
+    try:
+        with db_manager.get_session() as session:
+            query = session.query(ConversationSession)
+            
+            # nickname 우선 검색
+            if nickname:
+                db_session = query.filter_by(nickname=nickname).first()
+            elif name:
+                db_session = query.filter_by(name=name).first()
+            else:
+                db_session = None
+            
+            if db_session:
+                return {
+                    "success": True,
+                    "session_id": db_session.session_id,
+                    "name": db_session.name,
+                    "nickname": db_session.nickname,
+                    "user_id": db_session.user_id,
+                    "created_at": db_session.created_at.isoformat() if db_session.created_at else None,
+                    "updated_at": db_session.updated_at.isoformat() if db_session.updated_at else None
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": "세션을 찾을 수 없습니다"
+                }
+    except Exception as e:
+        logger.error(f"Failed to find session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"세션 검색 실패: {str(e)}")
+
+
+@app.delete("/api/sessions/{session_id}", summary="세션 삭제")
+async def delete_session_api(session_id: str):
+    """세션을 삭제합니다."""
+    if not db_manager._initialized:
+        raise HTTPException(status_code=503, detail="Database not initialized")
+    
+    try:
+        with db_manager.get_session() as session:
+            db_session = session.query(ConversationSession).filter_by(session_id=session_id).first()
+            if not db_session:
+                raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다")
+            
+            # 메시지도 함께 삭제
+            from .database import ConversationMessage
+            session.query(ConversationMessage).filter_by(session_id=session_id).delete()
+            
+            # 세션 삭제
+            session.delete(db_session)
+            session.commit()
+            
+            # Redis에서도 삭제
+            try:
+                await redis_session_manager.delete_session(session_id)
+            except Exception:
+                pass
+            
+            # Fallback에서도 삭제
+            if session_id in fallback_store:
+                del fallback_store[session_id]
+            
+            return {
+                "success": True,
+                "message": f"세션 {session_id} 삭제됨"
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete session: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"세션 삭제 실패: {str(e)}")
 
 
 # ============= System Prompt 엔드포인트 =============
@@ -1946,6 +2297,169 @@ async def update_session_system_prompt(
     except Exception as e:
         logger.error(f"Failed to update session system prompt: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"System Prompt 업데이트 실패: {str(e)}")
+
+
+# ============= 테스트용 모킹 API =============
+
+class WanderingDetectionRequest(BaseModel):
+    """배회 탐지 시뮬레이션 요청"""
+    resident_name: Optional[str] = Field(None, description="어르신 성함")
+    nickname: Optional[str] = Field(None, description="어르신 nickname")
+    detection_location: Optional[str] = Field("복도", description="탐지 위치")
+
+
+@app.post("/api/test/wandering-detection", summary="배회 탐지 시뮬레이션 (테스트용)")
+async def simulate_wandering_detection(request: WanderingDetectionRequest):
+    """
+    어르신 배회 탐지를 시뮬레이션하는 테스트용 API
+    
+    이 API는 실제 배회 탐지 시스템을 모킹하여 안내 함수를 테스트할 수 있도록 합니다.
+    
+    **사용 예시:**
+    ```json
+    {
+        "nickname": "Akaza",
+        "detection_location": "1층 복도"
+    }
+    ```
+    
+    **응답:**
+    - 안내 메시지 및 어르신 정보 반환
+    """
+    try:
+        logger.info(f"Wandering detection simulation: nickname={request.nickname}, name={request.resident_name}, location={request.detection_location}")
+        
+        # 안내 함수 호출
+        result = await execute_function(
+            "guide_wandering_resident_to_room",
+            {
+                "resident_name": request.resident_name,
+                "nickname": request.nickname,
+                "detection_location": request.detection_location or "복도"
+            },
+            db_manager
+        )
+        
+        return {
+            "success": True,
+            "message": "배회 탐지 시뮬레이션 완료",
+            "detection_info": {
+                "resident_name": request.resident_name,
+                "nickname": request.nickname,
+                "detection_location": request.detection_location or "복도",
+                "detected_at": datetime.utcnow().isoformat()
+            },
+            "guidance_result": result
+        }
+    
+    except Exception as e:
+        logger.error(f"Error in wandering detection simulation: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"배회 탐지 시뮬레이션 실패: {str(e)}")
+
+
+class WanderingDetectionRequestProduction(BaseModel):
+    """배회 탐지 요청 (운영용)"""
+    resident_name: Optional[str] = Field(None, description="어르신 성함")
+    nickname: Optional[str] = Field(None, description="어르신 nickname")
+    detection_location: str = Field(..., description="탐지 위치 (필수)")
+    detection_confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="탐지 신뢰도 (0.0~1.0)")
+    camera_id: Optional[str] = Field(None, description="카메라 ID")
+    timestamp: Optional[str] = Field(None, description="탐지 시간 (ISO 8601 형식)")
+
+
+@app.post("/api/wandering/detection", summary="배회 탐지 안내 (운영용)")
+async def wandering_detection(request: WanderingDetectionRequestProduction):
+    """
+    Deep Learning 기반 객체 탐지 시스템에서 어르신 배회를 탐지했을 때 호출하는 운영용 API
+    
+    이 API는 실제 운영 환경에서 사용되며, 탐지 정보를 받아 안내 메시지를 생성하고 TTS 오디오를 제공합니다.
+    
+    **사용 예시:**
+    ```json
+    {
+        "nickname": "Akaza",
+        "detection_location": "1층 복도",
+        "detection_confidence": 0.95,
+        "camera_id": "camera_001",
+        "timestamp": "2025-01-22T10:30:00Z"
+    }
+    ```
+    
+    **응답:**
+    - 안내 메시지 배열 (최소 3개)
+    - 어르신 정보
+    - TTS 오디오 생성 (선택사항)
+    """
+    try:
+        detection_id = f"det_{int(datetime.utcnow().timestamp() * 1000)}"
+        logger.info(f"Wandering detection (production): id={detection_id}, nickname={request.nickname}, name={request.resident_name}, location={request.detection_location}")
+        
+        # 안내 함수 호출
+        result = await execute_function(
+            "guide_wandering_resident_to_room",
+            {
+                "resident_name": request.resident_name,
+                "nickname": request.nickname,
+                "detection_location": request.detection_location
+            },
+            db_manager
+        )
+        
+        # TTS 오디오 생성 (안내 메시지가 있는 경우)
+        tts_audio_url = None
+        if result.get("success") and result.get("resident_found") and result.get("guidance_messages"):
+            try:
+                # 첫 번째 안내 메시지를 TTS로 변환
+                guidance_text = result["guidance_messages"][0] if result["guidance_messages"] else ""
+                if guidance_text:
+                    # TTS 요청 생성 (실제로는 별도 엔드포인트로 제공하거나 캐싱)
+                    tts_audio_url = f"/api/tts/audio/{detection_id}"
+            except Exception as e:
+                logger.warning(f"Failed to generate TTS audio URL: {e}")
+        
+        response_data = {
+            "success": True,
+            "detection_id": detection_id,
+            "detection_info": {
+                "resident_name": request.resident_name,
+                "nickname": request.nickname,
+                "detection_location": request.detection_location,
+                "detection_confidence": request.detection_confidence,
+                "camera_id": request.camera_id,
+                "timestamp": request.timestamp or datetime.utcnow().isoformat(),
+                "detected_at": datetime.utcnow().isoformat()
+            },
+            "resident_found": result.get("resident_found", False),
+            "guidance_messages": result.get("guidance_messages", []),
+            "resident_info": result.get("resident_info"),
+        }
+        
+        if tts_audio_url:
+            response_data["tts_audio_url"] = tts_audio_url
+        
+        # 생활실 정보 추가
+        if result.get("resident_info") and result["resident_info"].get("room"):
+            response_data["room_info"] = {
+                "room_number": result["resident_info"]["room"].get("room_number"),
+                "floor": result["resident_info"]["room"].get("floor"),
+                "building": result["resident_info"]["room"].get("building")
+            }
+        
+        # WebSocket으로 모든 연결된 클라이언트에게 브로드캐스트
+        try:
+            await wandering_detection_manager.broadcast({
+                "type": "wandering_detection",
+                **response_data
+            })
+            logger.info(f"배회 탐지 이벤트 브로드캐스트 완료: {detection_id}")
+        except Exception as e:
+            logger.warning(f"배회 탐지 이벤트 브로드캐스트 실패: {e}")
+        
+        return response_data
+    
+    except Exception as e:
+        logger.error(f"Error in wandering detection (production): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"배회 탐지 처리 실패: {str(e)}")
 
 
 @app.get("/", summary="Health Check")
