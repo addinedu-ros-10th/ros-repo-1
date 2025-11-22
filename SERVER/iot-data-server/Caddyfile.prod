@@ -1,0 +1,76 @@
+# Production Environment Caddyfile for AWS EC2
+# HTTP only configuration (IP-based access - no SSL)
+
+# AWS EC2 Public IP - HTTP only
+:80 {
+    # Reverse proxy to FastAPI application
+    reverse_proxy app:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+        
+        # FastAPI static files and Swagger UI support
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port {server_port}
+    }
+
+    # Security headers
+    header {
+        # Security headers
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+        Content-Security-Policy "default-src 'self' https: data:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https://fastapi.tiangolo.com; font-src 'self' data:; connect-src 'self' https://cdn.jsdelivr.net;"
+        
+        # Performance headers
+        Cache-Control "public, max-age=3600"
+    }
+
+    # Logging
+    log {
+        output file /data/access_prod.log
+        format json
+    }
+
+    # Health check endpoint
+    @health {
+        path /health
+    }
+    respond @health 200
+
+    # Gzip compression
+    encode gzip
+    
+    # Handle FastAPI static files and Swagger UI
+    @static {
+        path /docs /redoc /openapi.json
+    }
+    
+    # Ensure proper handling of FastAPI endpoints
+    handle @static {
+        reverse_proxy app:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-Port {server_port}
+        }
+    }
+    
+    # Additional Swagger UI support
+    @swagger {
+        path /docs/*
+    }
+    
+    handle @swagger {
+        reverse_proxy app:8000
+    }
+}
+
+# Note: SSL certificates cannot be issued for IP addresses by Let's Encrypt
+# To enable HTTPS, you need a real domain name (e.g., iot-care.com)
+# and configure it in Route 53 or your DNS provider
+

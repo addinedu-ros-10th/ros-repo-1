@@ -1,0 +1,432 @@
+{
+  "test_timestamp": "2025-08-22T15:29:07.314040",
+  "base_url": "http://localhost:8000",
+  "total_apis": 17,
+  "test_results": {
+    "Users API": [
+      {
+        "timestamp": "2025-08-22 15:28:55",
+        "api_name": "Users API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:56",
+        "api_name": "Users API",
+        "test_step": "POST_생성",
+        "status": "성공",
+        "details": "생성된 ID: 93a01b52-2ae9-48a0-a944-5376a736397b"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:56",
+        "api_name": "Users API",
+        "test_step": "GET_생성후",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:56",
+        "api_name": "Users API",
+        "test_step": "PUT_수정",
+        "status": "실패",
+        "details": "데이터 수정 실패 (엔드포인트 미지원 가능성)"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:56",
+        "api_name": "Users API",
+        "test_step": "GET_수정후",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:56",
+        "api_name": "Users API",
+        "test_step": "DELETE_삭제",
+        "status": "성공",
+        "details": "삭제된 ID: 93a01b52-2ae9-48a0-a944-5376a736397b"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:56",
+        "api_name": "Users API",
+        "test_step": "GET_삭제후",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:57",
+        "api_name": "Users API",
+        "test_step": "POST_통합테스트",
+        "status": "성공",
+        "details": "통합테스트 ID: 018a78f5-d7ac-4d72-88b5-a2d2f5b39566"
+      }
+    ],
+    "CDS API": [
+      {
+        "timestamp": "2025-08-22 15:28:57",
+        "api_name": "CDS API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:57",
+        "api_name": "CDS API",
+        "test_step": "POST_생성",
+        "status": "성공",
+        "details": "생성된 ID: a5fb76e3-ac2b-42cc-83b7-ce9101628418_20250822_152857"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:57",
+        "api_name": "CDS API",
+        "test_step": "GET_생성후",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:58",
+        "api_name": "CDS API",
+        "test_step": "PUT_수정",
+        "status": "성공",
+        "details": "수정된 ID: a5fb76e3-ac2b-42cc-83b7-ce9101628418_20250822_152857"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:58",
+        "api_name": "CDS API",
+        "test_step": "GET_수정후",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:58",
+        "api_name": "CDS API",
+        "test_step": "DELETE_삭제",
+        "status": "실패",
+        "details": "데이터 삭제 실패 (엔드포인트 미지원 가능성)"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:58",
+        "api_name": "CDS API",
+        "test_step": "GET_삭제후",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:58",
+        "api_name": "CDS API",
+        "test_step": "POST_통합테스트",
+        "status": "실패",
+        "details": "통합테스트 데이터 생성 실패"
+      }
+    ],
+    "LoadCell API": [
+      {
+        "timestamp": "2025-08-22 15:28:58",
+        "api_name": "LoadCell API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:58",
+        "api_name": "LoadCell API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "MQ5 API": [
+      {
+        "timestamp": "2025-08-22 15:28:59",
+        "api_name": "MQ5 API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:59",
+        "api_name": "MQ5 API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "MQ7 API": [
+      {
+        "timestamp": "2025-08-22 15:28:59",
+        "api_name": "MQ7 API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:28:59",
+        "api_name": "MQ7 API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "RFID API": [
+      {
+        "timestamp": "2025-08-22 15:29:00",
+        "api_name": "RFID API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:00",
+        "api_name": "RFID API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "Sound API": [
+      {
+        "timestamp": "2025-08-22 15:29:01",
+        "api_name": "Sound API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:01",
+        "api_name": "Sound API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "TCRT5000 API": [
+      {
+        "timestamp": "2025-08-22 15:29:01",
+        "api_name": "TCRT5000 API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:01",
+        "api_name": "TCRT5000 API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "Ultrasonic API": [
+      {
+        "timestamp": "2025-08-22 15:29:02",
+        "api_name": "Ultrasonic API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:02",
+        "api_name": "Ultrasonic API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "EdgeFlame API": [
+      {
+        "timestamp": "2025-08-22 15:29:02",
+        "api_name": "EdgeFlame API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:03",
+        "api_name": "EdgeFlame API",
+        "test_step": "POST_생성",
+        "status": "성공",
+        "details": "생성된 ID: 481eb4cf-96db-4c56-a2bc-5f2282f58d0a"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:03",
+        "api_name": "EdgeFlame API",
+        "test_step": "GET_생성후",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:03",
+        "api_name": "EdgeFlame API",
+        "test_step": "PUT_수정",
+        "status": "실패",
+        "details": "데이터 수정 실패 (엔드포인트 미지원 가능성)"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:03",
+        "api_name": "EdgeFlame API",
+        "test_step": "GET_수정후",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:03",
+        "api_name": "EdgeFlame API",
+        "test_step": "DELETE_삭제",
+        "status": "실패",
+        "details": "데이터 삭제 실패 (엔드포인트 미지원 가능성)"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:03",
+        "api_name": "EdgeFlame API",
+        "test_step": "GET_삭제후",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:03",
+        "api_name": "EdgeFlame API",
+        "test_step": "POST_통합테스트",
+        "status": "실패",
+        "details": "통합테스트 데이터 생성 실패"
+      }
+    ],
+    "EdgePIR API": [
+      {
+        "timestamp": "2025-08-22 15:29:03",
+        "api_name": "EdgePIR API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:03",
+        "api_name": "EdgePIR API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "EdgeReed API": [
+      {
+        "timestamp": "2025-08-22 15:29:04",
+        "api_name": "EdgeReed API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:04",
+        "api_name": "EdgeReed API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "EdgeTilt API": [
+      {
+        "timestamp": "2025-08-22 15:29:04",
+        "api_name": "EdgeTilt API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:04",
+        "api_name": "EdgeTilt API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "ActuatorBuzzer API": [
+      {
+        "timestamp": "2025-08-22 15:29:05",
+        "api_name": "ActuatorBuzzer API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:05",
+        "api_name": "ActuatorBuzzer API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "ActuatorIRTX API": [
+      {
+        "timestamp": "2025-08-22 15:29:05",
+        "api_name": "ActuatorIRTX API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:05",
+        "api_name": "ActuatorIRTX API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "ActuatorRelay API": [
+      {
+        "timestamp": "2025-08-22 15:29:06",
+        "api_name": "ActuatorRelay API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:06",
+        "api_name": "ActuatorRelay API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ],
+    "ActuatorServo API": [
+      {
+        "timestamp": "2025-08-22 15:29:06",
+        "api_name": "ActuatorServo API",
+        "test_step": "GET_초기",
+        "status": "성공",
+        "details": "레코드 수: 0"
+      },
+      {
+        "timestamp": "2025-08-22 15:29:06",
+        "api_name": "ActuatorServo API",
+        "test_step": "POST_생성",
+        "status": "실패",
+        "details": "데이터 생성 실패"
+      }
+    ]
+  },
+  "created_ids": {
+    "Users API": "93a01b52-2ae9-48a0-a944-5376a736397b",
+    "CDS API": "a5fb76e3-ac2b-42cc-83b7-ce9101628418_20250822_152857",
+    "EdgeFlame API": "481eb4cf-96db-4c56-a2bc-5f2282f58d0a"
+  },
+  "failed_tests": [
+    "Users API - PUT_수정: 데이터 수정 실패 (엔드포인트 미지원 가능성)",
+    "CDS API - DELETE_삭제: 데이터 삭제 실패 (엔드포인트 미지원 가능성)",
+    "CDS API - POST_통합테스트: 통합테스트 데이터 생성 실패",
+    "LoadCell API - POST_생성: 데이터 생성 실패",
+    "MQ5 API - POST_생성: 데이터 생성 실패",
+    "MQ7 API - POST_생성: 데이터 생성 실패",
+    "RFID API - POST_생성: 데이터 생성 실패",
+    "Sound API - POST_생성: 데이터 생성 실패",
+    "TCRT5000 API - POST_생성: 데이터 생성 실패",
+    "Ultrasonic API - POST_생성: 데이터 생성 실패",
+    "EdgeFlame API - PUT_수정: 데이터 수정 실패 (엔드포인트 미지원 가능성)",
+    "EdgeFlame API - DELETE_삭제: 데이터 삭제 실패 (엔드포인트 미지원 가능성)",
+    "EdgeFlame API - POST_통합테스트: 통합테스트 데이터 생성 실패",
+    "EdgePIR API - POST_생성: 데이터 생성 실패",
+    "EdgeReed API - POST_생성: 데이터 생성 실패",
+    "EdgeTilt API - POST_생성: 데이터 생성 실패",
+    "ActuatorBuzzer API - POST_생성: 데이터 생성 실패",
+    "ActuatorIRTX API - POST_생성: 데이터 생성 실패",
+    "ActuatorRelay API - POST_생성: 데이터 생성 실패",
+    "ActuatorServo API - POST_생성: 데이터 생성 실패"
+  ]
+}

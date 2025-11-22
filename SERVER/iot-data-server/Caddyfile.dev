@@ -1,0 +1,32 @@
+# Development Environment Caddyfile
+# HTTP only (no SSL for development)
+
+:80 {
+    # Reverse proxy to FastAPI application
+    reverse_proxy iot-care-app:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Enable CORS for development
+    header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization"
+    }
+
+    # Logging
+    log {
+        output file /data/access_dev.log
+        format json
+    }
+
+    # Health check endpoint
+    @health {
+        path /health
+    }
+    respond @health 200
+}
+
