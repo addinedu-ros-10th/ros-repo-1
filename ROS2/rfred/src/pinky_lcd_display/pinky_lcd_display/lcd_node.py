@@ -8,7 +8,7 @@ from .lcd_manager import LCDDisplayManager
 
 # 인터페이스 import
 try:
-    from pinky_lcd_display_interfaces.srv import SetDisplay, SetStyle, ClearDisplay, SetLayout
+    from pinky_lcd_display_interfaces.srv import SetDisplay, SetStyle, ClearDisplay, SetLayout, DisplayImage
     from pinky_lcd_display_interfaces.msg import LCDStatus, LCDEvent
     from pinky_lcd_display_interfaces.action import SetDisplay as SetDisplayAction
     from pinky_lcd_display_interfaces.action import ScrollText
@@ -76,6 +76,13 @@ class LCDDisplayNode(Node):
                 SetLayout,
                 'lcd_controller/set_layout',
                 self.set_layout_callback
+            )
+            
+            # DisplayImage 서비스
+            self.display_image_srv = self.create_service(
+                DisplayImage,
+                'lcd_controller/display_image',
+                self.display_image_callback
             )
             
             # 상태 토픽 Publisher
@@ -238,6 +245,48 @@ class LCDDisplayNode(Node):
             response.success = False
             response.message = f"Error: {str(e)}"
             self.get_logger().error(f"ClearDisplay service error: {e}")
+            if INTERFACES_AVAILABLE:
+                self.publish_event(2, f"Error: {str(e)}")  # ERROR
+        
+        return response
+    
+    def display_image_callback(self, request, response):
+        """DisplayImage 서비스 콜백"""
+        try:
+            if request.use_path:
+                # 파일 경로 사용
+                if not request.image_path:
+                    response.success = False
+                    response.message = "image_path is required when use_path is true"
+                    return response
+                
+                self.lcd_manager.show_image(
+                    image_path=request.image_path,
+                    x=request.x,
+                    y=request.y,
+                    width=request.width,
+                    height=request.height,
+                    clear_before=request.clear_before
+                )
+            else:
+                # 이미지 데이터 사용 (직렬화된 PIL Image)
+                # TODO: 이미지 데이터 디코딩 구현 (필요시)
+                response.success = False
+                response.message = "image_data mode not yet implemented. Use image_path instead."
+                return response
+            
+            response.success = True
+            response.message = "Image displayed successfully"
+            
+            # 이벤트 발행
+            if INTERFACES_AVAILABLE:
+                self.publish_event(0, f"Image displayed: {request.image_path if request.use_path else 'from data'}")
+            
+            self.get_logger().info(f"DisplayImage service called: {request.image_path if request.use_path else 'from data'}")
+        except Exception as e:
+            response.success = False
+            response.message = f"Error: {str(e)}"
+            self.get_logger().error(f"DisplayImage service error: {e}")
             if INTERFACES_AVAILABLE:
                 self.publish_event(2, f"Error: {str(e)}")  # ERROR
         

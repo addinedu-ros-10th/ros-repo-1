@@ -1,0 +1,15 @@
+# DisplayImage 서비스
+# 이미지(PIL Image 객체를 직렬화한 바이트 또는 파일 경로)를 LCD에 표시
+
+string image_path          # 이미지 파일 경로 (GIF, PNG, JPEG 등)
+bool use_path             # true: image_path 사용, false: image_data 사용
+uint8[] image_data        # 이미지 데이터 (직렬화된 PIL Image)
+uint16 x                  # X 좌표 (픽셀, 기본값: 0)
+uint16 y                  # Y 좌표 (픽셀, 기본값: 0)
+uint16 width              # 너비 (0이면 원본 크기, 기본값: 0)
+uint16 height             # 높이 (0이면 원본 크기, 기본값: 0)
+bool clear_before         # 표시 전 화면 지우기 여부
+---
+bool success
+string message
+

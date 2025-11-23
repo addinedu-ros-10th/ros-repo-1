@@ -373,6 +373,78 @@ class LCDDisplayManager:
         self._last_frame = final_frame
         return final_frame
     
+    def show_image(self, image_path=None, image_obj=None, x=0, y=0, width=0, height=0, clear_before=False):
+        """
+        이미지를 LCD에 표시합니다.
+        
+        Args:
+            image_path: 이미지 파일 경로 (GIF, PNG, JPEG 등)
+            image_obj: PIL Image 객체 (image_path가 None인 경우 사용)
+            x, y: 이미지 위치 (픽셀)
+            width, height: 이미지 크기 (0이면 원본 크기)
+            clear_before: 표시 전 화면 지우기 여부
+        """
+        try:
+            # 이미지 로드
+            if image_path:
+                img = Image.open(image_path)
+            elif image_obj:
+                img = image_obj.copy()
+            else:
+                raise ValueError("Either image_path or image_obj must be provided")
+            
+            # RGB로 변환
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # 리사이즈
+            if width > 0 and height > 0:
+                img = img.resize((width, height), Image.Resampling.LANCZOS)
+            elif width > 0:
+                # 비율 유지하며 너비만 조정
+                ratio = width / img.width
+                new_height = int(img.height * ratio)
+                img = img.resize((width, new_height), Image.Resampling.LANCZOS)
+            elif height > 0:
+                # 비율 유지하며 높이만 조정
+                ratio = height / img.height
+                new_width = int(img.width * ratio)
+                img = img.resize((new_width, height), Image.Resampling.LANCZOS)
+            
+            # LCD 해상도에 맞게 리사이즈 (필요시)
+            if img.width > self.width or img.height > self.height:
+                img.thumbnail((self.width, self.height), Image.Resampling.LANCZOS)
+            
+            # 배경 이미지 생성
+            if clear_before:
+                bg_img = Image.new("RGB", (self.width, self.height), color=(0, 0, 0))
+            else:
+                # 기존 프레임이 있으면 사용, 없으면 검은 배경
+                if self._last_frame:
+                    bg_img = self._last_frame.copy()
+                else:
+                    bg_img = Image.new("RGB", (self.width, self.height), color=(0, 0, 0))
+            
+            # 이미지 배치 (중앙 정렬)
+            if x == 0 and y == 0:
+                # 중앙 정렬
+                x = (self.width - img.width) // 2
+                y = (self.height - img.height) // 2
+            
+            # 배경에 이미지 붙여넣기
+            bg_img.paste(img, (x, y))
+            
+            # LCD에 표시
+            lcd = self.ensure_lcd_ready()
+            lcd.img_show(bg_img)
+            
+            self._last_frame = bg_img
+            return bg_img
+            
+        except Exception as e:
+            print(f"Error displaying image: {e}")
+            raise
+    
     def show_scroll_text(self, text, direction=0, scroll_speed_ms=50, repeat_count=1, callback=None):
         """
         스크롤 텍스트를 표시합니다.
