@@ -15,6 +15,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/SetStyle.srv"
   "srv/ClearDisplay.srv"
   "srv/SetLayout.srv"
+  "srv/DisplayImage.srv"
   "msg/LCDStatus.msg"
   "msg/LCDEvent.msg"
   "action/SetDisplay.action"
