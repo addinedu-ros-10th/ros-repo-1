@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 import time
 
-import camera_receiver_marker_and_yolo_tracking_ver_0_2_1 as camera_tracking
-from camera_receiver_marker_and_yolo_tracking_ver_0_2_1 \
+import camera_receiver_marker_and_yolo_tracking as camera_tracking
+from camera_receiver_marker_and_yolo_tracking \
     import main, process_stop, yolo_mode, marker_mode, basic_mode
 
 from fastapi import FastAPI
