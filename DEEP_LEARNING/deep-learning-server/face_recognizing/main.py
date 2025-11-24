@@ -14,6 +14,12 @@ from camera_receiver_yolo_ver_0_3_1 import main_yolo
 import camera_receiver_marker_tracking_ver_0_2_2 as camera_marker
 from camera_receiver_marker_tracking_ver_0_2_2 import main_marker
 
+import camera_receiver_marker_and_yolo_tracking_integrated as camera_yolo_marker
+from camera_receiver_marker_and_yolo_tracking_integrated\
+    import main_yolo_marker, process_stop2, yolo_mode2, marker_mode2
+
+
+
 app = FastAPI()
 
 @app.get("/")
@@ -81,7 +87,7 @@ def send_signal_stop_marker():
     return {"status": "updated"}
 
 @app.get("/")
-async def root():
+async def dl_project_yolo_marker_integrated1():
     return {"message": "fastAPI training"}
 
 @app.post("/send-signal_run_dl_program")
@@ -127,6 +133,50 @@ def send_signal_tracking_switch():
         switch_message = "Tracking deactivated"
     else:
         camera_tracking.tracking_switch = True
+        switch_message = "Tracking activated"
+
+    return {"status": "updated", "tracking_switch": switch_message}
+
+@app.get("/")
+async def dl_project_yolo_marker_integrated2():
+    return {"message": "fastAPI training"}
+
+@app.post("/send-signal_run_dl_program_integrated")
+def send_signal_run_dl_program_integrated():
+
+    main_yolo_marker()
+
+    return {"status": f"updated: process_terminated"}\
+    
+@app.post("/send-signal_stop_dl_program_integrated")
+def send_signal_stop_dl_program_integrated():
+    
+    process_stop2()
+
+    return {"status": "updated"}
+
+@app.post("/send-signal_yolo_mode_integrated")
+def send_signal_yolo_mode_integrated():
+    
+    yolo_mode2()
+
+    return {"status": "updated: yolo mode"}
+
+@app.post("/send-signal_marker_mode_integrated")
+def send_signal_marker_mode_integrated():
+    
+    marker_mode2()
+
+    return {"status": "updated: marker mode"}
+
+@app.post("/send-signal_tracking_switch_integrated")
+def send_signal_tracking_switch_integrated():
+
+    if camera_yolo_marker.tracking_switch is True:
+        camera_yolo_marker.tracking_switch = False
+        switch_message = "Tracking deactivated"
+    else:
+        camera_yolo_marker.tracking_switch = True
         switch_message = "Tracking activated"
 
     return {"status": "updated", "tracking_switch": switch_message}
