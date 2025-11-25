@@ -14,10 +14,11 @@ import markdown
 from .config import settings
 from .models import (
     DetectionRequest, DetectionResponse, HealthResponse,
-    ScenarioTemplateRequest, TemplateResponse, LCDDisplayData
+    ScenarioTemplateRequest, TemplateResponse, LCDDisplayData,
+    EmotionRequest, EmotionResponse, ClearDisplayResponse
 )
 from .iot_data_client import IoTDataClient
-from .ros2_client import ROS2Client
+from .ros2_client import ROS2Client, EmotionClient
 from .resident_info_formatter import (
     format_display_data, format_room_info, format_morning_greeting, format_meal_assistance,
     format_conversation, format_wandering_detection, format_visitor_guidance
@@ -227,12 +228,13 @@ else:
 # 전역 클라이언트 인스턴스
 iot_data_client: Optional[IoTDataClient] = None
 ros2_client: Optional[ROS2Client] = None
+emotion_client: Optional[EmotionClient] = None
 
 
 @app.on_event("startup")
 async def startup_event():
     """애플리케이션 시작 시 초기화"""
-    global iot_data_client, ros2_client
+    global iot_data_client, ros2_client, emotion_client
     
     logger.info("ROS2 API Server 시작 중...")
     
@@ -256,17 +258,32 @@ async def startup_event():
         logger.warning(f"ROS2 클라이언트 초기화 실패 (모킹 모드로 동작): {e}")
         ros2_client = None
     
+    # 감정 표현 클라이언트 초기화
+    try:
+        emotion_client = EmotionClient(
+            namespace=settings.ROS2_NAMESPACE,
+            service_name=settings.ROS2_EMOTION_SERVICE_NAME
+        )
+        logger.info("감정 표현 클라이언트 초기화 완료")
+    except Exception as e:
+        logger.warning(f"감정 표현 클라이언트 초기화 실패 (모킹 모드로 동작): {e}")
+        emotion_client = None
+    
     logger.info("ROS2 API Server 시작 완료")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """애플리케이션 종료 시 정리"""
-    global ros2_client
+    global ros2_client, emotion_client
     
     if ros2_client:
         ros2_client.shutdown()
         logger.info("ROS2 클라이언트 종료 완료")
+    
+    if emotion_client:
+        emotion_client.shutdown()
+        logger.info("감정 표현 클라이언트 종료 완료")
 
 
 @app.get("/", response_model=dict)
@@ -284,6 +301,7 @@ async def health_check():
     """헬스 체크"""
     services = {
         "ros2": ros2_client.health_check() if ros2_client else False,
+        "emotion": emotion_client.health_check() if emotion_client else False,
         "iot_data_server": await iot_data_client.health_check() if iot_data_client else False,
     }
     
@@ -526,6 +544,97 @@ async def get_lcd_status():
         "message": "LCD 상태 조회 기능은 향후 구현 예정입니다",
         "current_display": None
     }
+
+
+@app.post("/api/emotion/set", response_model=EmotionResponse)
+async def set_emotion(request: EmotionRequest):
+    """
+    감정 표현 설정
+    
+    로봇의 감정 표현을 설정합니다. 지원하는 감정 타입:
+    - hello: 인사
+    - basic: 기본 상태
+    - angry: 화남
+    - bored: 지루함
+    - fun: 재미있음
+    - happy: 행복함
+    - interest: 관심
+    - sad: 슬픔
+    """
+    try:
+        if not emotion_client:
+            raise HTTPException(
+                status_code=503,
+                detail="감정 표현 서비스가 사용 불가능합니다"
+            )
+        
+        # 감정 표현 설정
+        success, message = emotion_client.set_emotion(
+            emotion=request.emotion,
+            timeout=settings.ROS2_EMOTION_SERVICE_TIMEOUT
+        )
+        
+        if success:
+            return EmotionResponse(
+                success=True,
+                message=message,
+                emotion=request.emotion
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=message
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"감정 표현 설정 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@app.post("/api/lcd/clear", response_model=ClearDisplayResponse)
+async def clear_lcd_display():
+    """
+    LCD 화면 지우기
+    
+    LCD 화면을 검은 화면으로 초기화합니다.
+    모든 표시 내용을 지우고 빈 화면으로 만듭니다.
+    """
+    try:
+        if not ros2_client:
+            raise HTTPException(
+                status_code=503,
+                detail="ROS2 서비스가 사용 불가능합니다"
+            )
+        
+        # LCD 화면 지우기
+        success, message = ros2_client.clear_display(
+            timeout=settings.ROS2_SERVICE_TIMEOUT
+        )
+        
+        if success:
+            return ClearDisplayResponse(
+                success=True,
+                message=message
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=message
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"LCD 화면 지우기 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 
 # 에러 핸들러

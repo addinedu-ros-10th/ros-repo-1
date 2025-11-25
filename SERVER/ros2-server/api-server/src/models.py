@@ -121,3 +121,38 @@ class TemplateResponse(BaseModel):
     scenario: str
     description: str
 
+
+class EmotionRequest(BaseModel):
+    """감정 표현 요청"""
+    emotion: Literal[
+        "hello", "basic", "angry", "bored",
+        "fun", "happy", "interest", "sad"
+    ] = Field(..., description="감정 타입")
+    
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {"emotion": "hello"},
+                {"emotion": "happy"},
+                {"emotion": "sad"},
+                {"emotion": "angry"},
+                {"emotion": "fun"},
+                {"emotion": "bored"},
+                {"emotion": "interest"},
+                {"emotion": "basic"}
+            ]
+        }
+
+
+class EmotionResponse(BaseModel):
+    """감정 표현 응답"""
+    success: bool
+    message: str
+    emotion: Optional[str] = None
+
+
+class ClearDisplayResponse(BaseModel):
+    """LCD 화면 지우기 응답"""
+    success: bool
+    message: str
+

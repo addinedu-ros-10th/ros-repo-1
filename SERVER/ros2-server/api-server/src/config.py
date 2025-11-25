@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     ROS2_SERVICE_TIMEOUT: float = float(os.getenv("ROS2_SERVICE_TIMEOUT", "2.0"))
     ROS2_SERVICE_NAME: str = "lcd_controller/set_display"
     
+    # ROS2 감정 표현 설정
+    ROS2_EMOTION_SERVICE_NAME: str = os.getenv("ROS2_EMOTION_SERVICE_NAME", "emotion_controller/set_emotion")
+    ROS2_EMOTION_SERVICE_TIMEOUT: float = float(os.getenv("ROS2_EMOTION_SERVICE_TIMEOUT", "3.0"))
+    
     # ROS2 도메인 ID 설정
     # 사용 가능한 도메인 ID 목록 (쉼표로 구분, 예: "11,12,13")
     ROS2_DOMAIN_ID_ALLOWED: str = os.getenv("ROS2_DOMAIN_ID_ALLOWED", "11,12,13")
