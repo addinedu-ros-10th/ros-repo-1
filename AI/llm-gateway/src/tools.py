@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # API 베이스 URL
 API_BASE_URL = "http://ec2-54-180-206-205.ap-northeast-2.compute.amazonaws.com"
 IOT_BASE_URL = "http://192.168.0.59:8000"
+DL_BASE_URL = "http://192.168.10.11:8000"
 
 # 함수 정의 리스트
 TOOLS = [
@@ -943,7 +944,7 @@ async def _start_customized_mobile_conversation(session_id: str, user_id: str, d
                 async with httpx.AsyncClient(timeout=120.0) as client:  # 타임아웃을 120초로 증가
                     try:
                         response = await client.post(
-                            f"{IOT_BASE_URL}/send-signal_run_yolo",
+                            f"{DL_BASE_URL}/send-signal_run_yolo",
                             headers={"accept": "application/json"},
                             content=""
                         )
@@ -1073,7 +1074,7 @@ async def _activate_tracking(session_id: str, db_manager) -> Dict[str, Any]:
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 response = await client.post(
-                    f"{IOT_BASE_URL}/send-signal_tracking_switch",
+                    f"{DL_BASE_URL}/send-signal_tracking_switch",
                     headers={"accept": "application/json"},
                     content=""
                 )
@@ -1195,7 +1196,7 @@ async def _end_customized_mobile_conversation(session_id: str, db_manager) -> Di
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 response = await client.post(
-                    f"{IOT_BASE_URL}/send-signal_stop_yolo",
+                    f"{DL_BASE_URL}/send-signal_stop_yolo",
                     headers={"accept": "application/json"},
                     content=""
                 )

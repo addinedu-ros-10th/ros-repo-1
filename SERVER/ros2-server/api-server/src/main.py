@@ -15,7 +15,8 @@ from .config import settings
 from .models import (
     DetectionRequest, DetectionResponse, HealthResponse,
     ScenarioTemplateRequest, TemplateResponse, LCDDisplayData,
-    EmotionRequest, EmotionResponse, ClearDisplayResponse
+    EmotionRequest, EmotionResponse, ClearDisplayResponse,
+    CustomDisplayRequest, CustomDisplayResponse
 )
 from .iot_data_client import IoTDataClient
 from .ros2_client import ROS2Client, EmotionClient
@@ -590,6 +591,97 @@ async def set_emotion(request: EmotionRequest):
         raise
     except Exception as e:
         logger.error(f"감정 표현 설정 중 오류: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
+
+
+@app.post("/api/lcd/display", response_model=CustomDisplayResponse)
+async def display_custom_text(request: CustomDisplayRequest):
+    """
+    커스텀 텍스트 LCD 표시
+    
+    원하는 텍스트를 직접 입력하여 LCD에 표시합니다.
+    템플릿 스타일을 선택하여 기존 템플릿과 유사한 형식으로 표시할 수 있습니다.
+    
+    ## 사용 예시
+    
+    ### 기본 커스텀 표시
+    ```json
+    {
+      "title": "안내사항",
+      "lines": [
+        "오늘은 휴진일입니다",
+        "필요하시면 간병인을",
+        "호출해주세요"
+      ],
+      "show_timestamp": true,
+      "template_style": "custom"
+    }
+    ```
+    
+    ### 템플릿 스타일 사용
+    템플릿 스타일을 선택하면 해당 템플릿의 포맷을 참고하여 표시됩니다.
+    (현재는 스타일만 참고하며, 실제 데이터는 입력한 title과 lines를 사용합니다)
+    
+    지원하는 템플릿 스타일:
+    - **custom**: 기본 커스텀 형식 (기본값)
+    - **morning_greeting**: 아침인사 스타일
+    - **meal_assistance**: 식사 지원 스타일
+    - **conversation**: 대화 스타일
+    - **wandering_detection**: 배회 감지 스타일
+    - **visitor_guidance**: 면회객 안내 스타일
+    
+    ## 제한사항
+    
+    - title: 최대 50자
+    - lines: 최소 1줄, 최대 5줄
+    - 각 라인은 적절한 길이로 제한하는 것을 권장합니다
+    """
+    try:
+        if not ros2_client:
+            raise HTTPException(
+                status_code=503,
+                detail="ROS2 서비스가 사용 불가능합니다"
+            )
+        
+        # 빈 라인 제거
+        filtered_lines = [line for line in request.lines if line.strip()]
+        if not filtered_lines:
+            raise HTTPException(
+                status_code=400,
+                detail="최소 1줄의 텍스트가 필요합니다"
+            )
+        
+        # LCD에 표시
+        success = ros2_client.display_resident_info(
+            title=request.title,
+            lines=filtered_lines,
+            show_timestamp=request.show_timestamp,
+            timeout=settings.ROS2_SERVICE_TIMEOUT
+        )
+        
+        if success:
+            return CustomDisplayResponse(
+                success=True,
+                message="LCD에 텍스트가 성공적으로 표시되었습니다",
+                display_data=LCDDisplayData(
+                    title=request.title,
+                    lines=filtered_lines,
+                    show_timestamp=request.show_timestamp
+                )
+            )
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="LCD 표시에 실패했습니다"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"커스텀 텍스트 LCD 표시 중 오류: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"

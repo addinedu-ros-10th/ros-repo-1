@@ -156,3 +156,51 @@ class ClearDisplayResponse(BaseModel):
     success: bool
     message: str
 
+
+class CustomDisplayRequest(BaseModel):
+    """커스텀 LCD 표시 요청"""
+    title: str = Field(..., description="타이틀 텍스트", min_length=1, max_length=50)
+    lines: List[str] = Field(..., description="본문 라인들 (최대 5줄)", min_items=1, max_items=5)
+    show_timestamp: bool = Field(True, description="타임스탬프 표시 여부")
+    template_style: Optional[Literal[
+        "custom",
+        "morning_greeting",
+        "meal_assistance",
+        "conversation",
+        "wandering_detection",
+        "visitor_guidance"
+    ]] = Field("custom", description="템플릿 스타일 (선택적, 기본값: custom)")
+    
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "title": "안내사항",
+                    "lines": [
+                        "오늘은 휴진일입니다",
+                        "필요하시면 간병인을",
+                        "호출해주세요"
+                    ],
+                    "show_timestamp": True,
+                    "template_style": "custom"
+                },
+                {
+                    "title": "긴급 공지",
+                    "lines": [
+                        "화재 대피 훈련",
+                        "오후 2시에 진행됩니다",
+                        "참여 부탁드립니다"
+                    ],
+                    "show_timestamp": True,
+                    "template_style": "custom"
+                }
+            ]
+        }
+
+
+class CustomDisplayResponse(BaseModel):
+    """커스텀 LCD 표시 응답"""
+    success: bool
+    message: str
+    display_data: LCDDisplayData
+
