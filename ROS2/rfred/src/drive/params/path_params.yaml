@@ -1,0 +1,15 @@
+# 주행 테스트때 사용한 값들(직선 주행 + 회전)
+straight_rotate:
+  ros__parameters:
+    dining:
+      # # 배식 시나리오 (충전대기 -> 배식대 -> 1번 테이블 -> 배식대 -> 2번 테이블 -> 배식대 -> 3번 테이블 -> 배식대 -> 충전 대기위치)
+      # move: ["rotate", "move", "rotate", "move", "rotate", "move", "wait",      "rotate", "move", "rotate", "move", "wait",        "rotate", "move", "rotate", "move", "wait",        "rotate", "move", "rotate", "move", "wait",        "rotate", "move", "rotate", "move", "wait",    "rotate", "move", "rotate", "move", "wait",        "rotate", "move", "rotate", "move", "wait",    "rotate", "move", "rotate", "move", "rotate", "move", "rotate"]
+      # value: [-90.0, 0.765, -90.0, 0.5, 90.0, 1.7, 4.0,          180.0, 0.35, 90.0, 0.35, 4.0,         180.0, 0.35, -90.0, 0.35, 4.0,     180.0, 1.15, 90.0, 0.35, 4.0,    180.0, 0.35, -90.0, 1.15, 4.0,      180.0, 1.95, 90.0, 0.35, 4.0,     180.0, 0.35, -90.0, 1.95, 4.0,     180.0, 1.7, -90.0, 0.5, 90.0, 0.765, -90.0]
+      # 배식 시나리오 (충전대기 -> 배식대 -> 1번 테이블 -> 배식대 -> 2번 테이블 -> 배식대 -> 3번 테이블 -> 배식대 -> 충전 대기위치)
+      move: ["rotate", "move", "rotate", "move", "rotate", "move", "wait",      "rotate", "move", "rotate", "move", "wait",        "rotate", "move", "rotate", "move", "wait",        "rotate", "move", "rotate", "move", "wait",        "rotate", "move", "rotate", "move", "wait",    "rotate", "move", "rotate", "move", "wait",        "rotate", "move", "rotate", "move", "rotate", "move", "rotate"]
+      value: [-90.0, 0.765, -90.0, 0.5, 90.0, 1.7, 4.0,          180.0, 0.35, 90.0, 0.35, 4.0,         180.0, 0.35, -90.0, 0.35, 4.0,     180.0, 1.15, 90.0, 0.35, 4.0,    180.0, 0.35, -90.0, 1.15, 4.0,      180.0, 1.95, 90.0, 0.35, 4.0,     90.0, 0.25, 90.0, 0.9, 90.0, 0.765, -90.0]
+    dormitory:
+      # 생활관 호출 시나리오 ( 충전 대기 -> 3번방)
+      move: ["rotate", "move", "rotate", "move", "wait",    "rotate", "move", "rotate", "move",    "rotate", "move", "rotate", "move","rotate", "move"]
+      value: [-90.0, 1.85, 90.0, 0.35, 4.0,    180.0, 0.35, -90.0, 0.9,     90.0, 0.45, -90.0, 0.9, 90.0, 0.75   ]
+

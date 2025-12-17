@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# 테스트
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+# tests/ 디렉토리는 정적 파일 서빙을 위해 포함해야 함
+# tests/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 환경 변수
+.env
+.env.local
+.env.*.local
+
+# 로그
+logs/
+*.log
+
+# 빌드
+build/
+dist/
+*.egg-info/
+
+# 문서 (Docker 이미지에는 불필요)
+docs/
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 스크립트 (운영 환경에서는 불필요)
+scripts/
+Makefile
+
+# 프로젝트별
+*.md.bak
+temp/
+tmp/

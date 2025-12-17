@@ -1,0 +1,29 @@
+# 1. PIR 센서 (6종)
+python get_device_ids.py "PIR 모션 인식센서" pir_devices.csv
+
+# 2. RFID 센서 (1종)
+python get_device_ids.py "RFID 모듈" rfid_devices.csv
+
+# 3. 리드 스위치 센서 (1종)
+python get_device_ids.py "리드 스위치 센서" reed_devices.csv
+
+# 4. 사운드 센서 (4종)
+python get_device_ids.py "사운드 센서" sound_devices.csv
+
+# 5. 로드셀(무게) 센서 (3종)
+python get_device_ids.py "무게 센서 로드셀" loadcell_devices.csv
+
+# 6. 온도 센서 (1종)
+python get_device_ids.py "LM35" temperature_devices.csv
+
+# 7. MQ-5 (가스) 센서 (1종)
+python get_device_ids.py "MQ-5" mq5_devices.csv
+
+# 8. MQ-7 (일산화탄소) 센서 (2종)
+python get_device_ids.py "MQ-7" mq7_devices.csv
+
+# 9. 푸시버튼 (4종)
+python get_device_ids.py "Push Button" button_devices.csv
+
+# 10. 부저 (1종)
+python get_device_ids.py "5V 수동부저" buzzer_devices.csv

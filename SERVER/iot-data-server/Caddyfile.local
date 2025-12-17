@@ -1,0 +1,31 @@
+# Local Environment Caddyfile
+# HTTP only (no SSL for local development)
+
+:80 {
+    # Reverse proxy to FastAPI application
+    reverse_proxy app:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Enable CORS for local development
+    header {
+        Access-Control-Allow-Origin *
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        Access-Control-Allow-Headers "Content-Type, Authorization"
+    }
+
+    # Logging
+    log {
+        output file /data/access_local.log
+        format json
+    }
+
+    # Health check endpoint
+    @health {
+        path /health
+    }
+    respond @health 200
+}

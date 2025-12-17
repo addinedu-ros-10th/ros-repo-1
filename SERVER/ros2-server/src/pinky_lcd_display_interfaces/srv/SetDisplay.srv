@@ -1,0 +1,9 @@
+# Request
+string title                    # 타이틀 텍스트 (최대 20자)
+string[] lines                  # 본문 라인들 (각 라인 최대 길이 제한)
+bool show_timestamp             # 타임스탬프 표시 여부
+---
+# Response
+bool success
+string message
+

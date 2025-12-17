@@ -1,0 +1,341 @@
+"""
+통합된 FastAPI 메인 애플리케이션
+
+모든 기능을 통합한 메인 애플리케이션:
+- 스케줄러 기능
+- SQLAdmin 관리자 패널
+- 헥사고날 아키텍처 지원
+- Docker Compose 환경 지원
+"""
+
+from __future__ import annotations
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+import asyncpg
+import os
+from dotenv import load_dotenv
+from typing import List, Dict, Any, Optional
+from datetime import datetime
+from urllib.parse import unquote, urlparse
+
+def _mask_url(url: str) -> str:
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url.replace('postgresql+asyncpg://', 'postgresql://'))
+        host = parsed.hostname or 'unknown-host'
+        port = parsed.port or '5432'
+        db = (parsed.path[1:] if parsed.path else '') or 'unknown-db'
+        scheme = 'postgresql+asyncpg' if url.startswith('postgresql+asyncpg://') else 'postgresql'
+        return f"{scheme}://***:***@{host}:{port}/{db}"
+    except Exception:
+        return '(invalid url)'
+
+def _load_env():
+    env_file = None
+    app_env = os.getenv('APP_ENV', '').lower()
+    if app_env == 'local':
+        env_file = 'secret/.env.local'
+    elif app_env in ('prod', 'production'):
+        env_file = 'secret/.env.prod'
+    if env_file and os.path.exists(env_file):
+        load_dotenv(env_file)
+        print(f"[ENV] Loaded dotenv file: {env_file}")
+    else:
+        print("[ENV] Skipping dotenv load (using process environment)")
+
+def _log_startup_env():
+    vars_to_log = ['APP_ENV','DB_MODE','DB_APP_URL','ML_DB_URL','DB_LEGACY_URL','DEBUG']
+    masked = {}
+    for k in vars_to_log:
+        v = os.getenv(k)
+        if not v:
+            masked[k] = None
+        elif k.endswith('_URL'):
+            masked[k] = _mask_url(v)
+        else:
+            masked[k] = v
+    print(f"[ENV] Startup config: {masked}")
+
+def create_app() -> FastAPI:
+    """통합된 FastAPI 애플리케이션 팩토리 함수"""
+    
+    _load_env()
+    _log_startup_env()
+
+    app = FastAPI(
+        title="App Server API with Scheduler & Admin",
+        description="Deep Learning/IoT Care App Server with APScheduler, SQLAdmin, and Hexagonal Architecture",
+        version="1.0.0",
+        docs_url="/docs",
+        redoc_url="/redoc"
+    )
+
+    # CORS 설정
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # 스케줄러 애플리케이션 임포트 및 설정
+    from app.scheduler_app import router as scheduler_router, startup_event, shutdown_event
+    
+    # 스케줄러 애플리케이션의 라우터들을 메인 앱에 포함
+    app.include_router(scheduler_router)
+    
+    # ML 레지스트리 라우터 포함
+    from app.adapters.http.dataset_router import router as dataset_router
+    from app.adapters.http.experiment_router import router as experiment_router
+    from app.adapters.http.frame_prediction_router import router as frame_prediction_router
+    from app.adapters.http.detection_event_router import router as detection_event_router
+    from app.adapters.http.notify_message_router import router as notify_message_router
+    from app.adapters.http.notify_delivery_router import router as notify_delivery_router
+    from app.adapters.http.notify_device_router import router as notify_device_router
+    from app.adapters.http.notify_queue_router import router as notify_queue_router
+    from app.adapters.http.ws_router import router as ws_router
+    from app.adapters.http.robot_detection_router import router as robot_detection_router
+    
+    app.include_router(dataset_router)
+    app.include_router(experiment_router)
+    app.include_router(frame_prediction_router)
+    app.include_router(detection_event_router)
+    app.include_router(notify_message_router)
+    app.include_router(notify_delivery_router)
+    app.include_router(notify_device_router)
+    app.include_router(notify_queue_router)
+    app.include_router(ws_router)
+    app.include_router(robot_detection_router)
+    
+    # 데이터베이스 초기화 이벤트 핸들러
+    @app.on_event("startup")
+    async def startup_db():
+        """데이터베이스 매니저 초기화"""
+        from app.infrastructure.db.session import db_manager
+        try:
+            await db_manager.initialize()
+            print("✅ 데이터베이스 매니저 초기화 완료")
+        except Exception as e:
+            print(f"⚠️ 데이터베이스 매니저 초기화 실패: {e}")
+    
+    # 스케줄러 이벤트 핸들러 포함
+    app.add_event_handler("startup", startup_event)
+    app.add_event_handler("shutdown", shutdown_event)
+
+    # SQLAdmin 관리자 패널 설정
+    _setup_admin_panel(app)
+    # Notify dispatcher startup (feature-flagged)
+    @app.on_event("startup")
+    async def _start_notify_dispatcher():
+        import asyncio
+        from app.services.notify_dispatcher import dispatcher_loop
+        asyncio.create_task(dispatcher_loop())
+    
+    # Robot detection action executor startup
+    @app.on_event("startup")
+    async def _start_action_executor():
+        from app.services.robot_detection_action_executor import action_executor
+        await action_executor.initialize()
+        print("✅ Robot detection action executor initialized")
+    
+    # Robot detection action executor shutdown
+    @app.on_event("shutdown")
+    async def _shutdown_action_executor():
+        from app.services.robot_detection_action_executor import action_executor
+        await action_executor.close()
+        print("✅ Robot detection action executor closed")
+
+    # 추가 API 엔드포인트 설정 (한 번만 실행)
+    if not hasattr(app, '_endpoints_configured'):
+        _setup_additional_endpoints(app)
+        app._endpoints_configured = True
+    
+    return app
+
+
+def _setup_admin_panel(app: FastAPI) -> None:
+    """SQLAdmin 관리자 패널 설정 (동기 버전 - 호환성 유지)"""
+    try:
+        from app.admin.admin_app import admin_app
+        admin_app.mount_to_app(app)
+        print("✅ SQLAdmin 관리자 패널이 성공적으로 마운트되었습니다.")
+    except Exception as e:
+        print(f"⚠️ SQLAdmin 관리자 패널 마운트 실패: {e}")
+
+
+def _setup_additional_endpoints(app: FastAPI) -> None:
+    """추가 API 엔드포인트 설정"""
+    
+    @app.get("/")
+    async def root():
+        """루트 엔드포인트"""
+        return {
+            "message": "App Server API with Scheduler & Admin",
+            "version": "1.0.0",
+            "status": "running",
+            "timestamp": datetime.now().isoformat(),
+            "docs": "/docs",
+            "admin": "/admin",
+            "scheduler": "active",
+            "features": [
+                "APScheduler 스케줄러",
+                "SQLAdmin 관리자 패널",
+                "헥사고날 아키텍처 지원",
+                "Docker Compose 환경 지원"
+            ]
+        }
+
+    @app.get("/api/v1/tables")
+    async def list_tables():
+        """데이터베이스 테이블 목록 조회"""
+        try:
+            from app.infrastructure.db.session import db_manager
+            from sqlalchemy import text
+            session = db_manager.get_app_session()
+            try:
+                result = await session.execute(text("""
+                    SELECT table_name, table_type
+                    FROM information_schema.tables 
+                    WHERE table_schema = 'public'
+                    ORDER BY table_name
+                """))
+                tables = result.fetchall()
+            finally:
+                await session.close()
+            return {
+                "tables": [{"table_name": row[0], "table_type": row[1]} for row in tables],
+                "count": len(tables),
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch tables: {str(e)}")
+
+    @app.get("/api/v1/scheduled-jobs")
+    async def get_scheduled_jobs():
+        """스케줄 작업 목록 조회"""
+        try:
+            from app.infrastructure.db.session import db_manager
+            from sqlalchemy import text
+            session = db_manager.get_app_session()
+            try:
+                result = await session.execute(text("""
+                    SELECT id, name, func, cron, enabled, status, 
+                           last_run_at, next_run_at, created_at
+                    FROM scheduled_jobs 
+                    WHERE is_deleted = false
+                    ORDER BY created_at DESC
+                """))
+                jobs = result.fetchall()
+            finally:
+                await session.close()
+            return {
+                "jobs": [{"id": row[0], "name": row[1], "func": row[2], "cron": row[3], 
+                         "enabled": row[4], "status": row[5], "last_run_at": row[6], 
+                         "next_run_at": row[7], "created_at": row[8]} for row in jobs],
+                "count": len(jobs),
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch scheduled jobs: {str(e)}")
+
+    @app.get("/api/v1/database/info")
+    async def get_database_info():
+        """데이터베이스 정보 조회"""
+        try:
+            from app.infrastructure.db.session import db_manager
+            from sqlalchemy import text
+            session = db_manager.get_app_session()
+            try:
+                version_result = await session.execute(text("SELECT version()"))
+                version = version_result.scalar()
+                table_count_result = await session.execute(text("""
+                    SELECT COUNT(*) FROM information_schema.tables 
+                    WHERE table_schema = 'public'
+                """))
+                table_count = table_count_result.scalar()
+                job_stats_result = await session.execute(text("""
+                    SELECT 
+                        COUNT(*) as total_jobs,
+                        COUNT(CASE WHEN enabled = true THEN 1 END) as enabled_jobs,
+                        COUNT(CASE WHEN status = 'idle' THEN 1 END) as idle_jobs,
+                        COUNT(CASE WHEN status = 'running' THEN 1 END) as running_jobs
+                    FROM scheduled_jobs 
+                    WHERE is_deleted = false
+                """))
+                job_stats_row = job_stats_result.fetchone()
+            finally:
+                await session.close()
+            return {
+                "database_version": version,
+                "table_count": table_count,
+                "scheduled_jobs_stats": {
+                    "total_jobs": job_stats_row[0],
+                    "enabled_jobs": job_stats_row[1],
+                    "idle_jobs": job_stats_row[2],
+                    "running_jobs": job_stats_row[3]
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch database info: {str(e)}")
+
+    @app.get("/api/v1/admin/info")
+    async def get_admin_info():
+        """관리자 패널 정보 조회"""
+        return {
+            "admin_url": "/admin",
+            "features": [
+                "스케줄 작업 관리",
+                "작업 생성/수정/삭제",
+                "실시간 상태 모니터링",
+                "Cron 표현식 검증"
+            ],
+            "available_models": [
+                "ScheduledJob"
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+
+    @app.get("/api/v1/architecture/info")
+    async def get_architecture_info():
+        """아키텍처 정보 조회"""
+        return {
+            "architecture": "hybrid",
+            "patterns": [
+                "Factory Pattern",
+                "Dependency Injection",
+                "Hexagonal Architecture (partial)",
+                "Repository Pattern"
+            ],
+            "components": [
+                "FastAPI",
+                "APScheduler",
+                "SQLAlchemy",
+                "SQLAdmin",
+                "AsyncPG"
+            ],
+            "layers": [
+                "Presentation (FastAPI)",
+                "Application (Use Cases)",
+                "Domain (Entities)",
+                "Infrastructure (Database)"
+            ],
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+async def _get_db_connection():
+    """데이터베이스 연결 생성"""
+    from app.infrastructure.db.connection_utils import get_db_connection_params
+    
+    # 환경변수에서 DB 연결 정보 파싱
+    conn_params = get_db_connection_params('DB_APP_URL')
+    return await asyncpg.connect(**conn_params)
+
+
+# Docker Compose에서 사용할 수 있도록 직접 실행 가능
+if __name__ == "__main__":
+    import uvicorn
+    app = create_app()
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")

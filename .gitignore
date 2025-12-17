@@ -135,7 +135,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+.env*
 .envrc
 .venv
 env/
@@ -205,3 +205,83 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ---- ROS2 ----
+install/
+build/
+log/
+*.bag
+*.launch.pyc
+
+# ---- Arduino / C++ ----
+*.hex
+*.bin
+*.elf
+*.o
+*.d
+*.obj
+*.cpp.o
+*.ino.cpp
+
+# ---- Flutter / Dart ----
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+build/
+android/.gradle/
+android/.idea/
+ios/.symlinks/
+ios/Pods/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+web/wasm/
+.melos_tool/
+
+# ---- Node / Web ----
+node_modules/
+npm-debug.log
+yarn-error.log
+dist/
+package-lock.json
+
+# ---- Docker / Logs ----
+docker-compose.override.yml
+# .env* files are already ignored above
+
+# ---- Security / Keys ----
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+
+# ---- Environment Files (explicit) ----
+.env
+.env.*
+.env.local
+.env.dev
+.env.prod
+.env.aws
+.env.local.backup*
+!*.env.example
+!*.env.template
+
+# ---- Secret Directories ----
+**/secret/
+**/secrets/
+**/*secret*/
+**/*key*/
+**/*password*/
+
+# ---- OS / System Files ----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
