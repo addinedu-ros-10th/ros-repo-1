@@ -8,6 +8,8 @@ import math
 
 from ultralytics import YOLO
 
+import requests
+
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String, Float32, Float32MultiArray
@@ -15,6 +17,13 @@ from geometry_msgs.msg import Twist  # 추가된 부분
 
 tracking_switch = False
 process_stop_flag = False
+
+recognized_name = None
+recognized_cls_id = None
+recognized_cls_type = {"입소자": [0, 3, 7, 17], "직원": [8, 11, 14, 15], "면회객": [2, 5, 12, 16]}
+recognized_group = None
+
+call_information_time = 0
 
 # 코드 A에서 사용한 PinkyDockController 클래스
 class PinkyDockController:
@@ -159,13 +168,31 @@ def changeTrackingSwitch():
     else:
         tracking_switch = True
 
+# def makeRecognizedLog():
+#     global recognized_name
+#     global recognized_cls_id
+
+#     return [recognized_cls_id, recognized_name]
+
 # UDP 수신 및 MJPEG 디코딩
-def main():
+def main_yolo():
     rclpy.init()
     node = rclpy.create_node("pinky_recognize_and_tracking")
 
     """====== 초기 설정 변수 일람 ======"""
     switch_time = None
+
+    global recognized_name
+    global recognized_cls_id
+    global recognized_cls_type
+    global recognized_group
+
+    call_information_flag = False
+    global call_information_time
+    
+    time_gap = 0
+
+    start_flag = True
 
     frame_count = 0
     bbox_previous_coordinate = None
@@ -233,9 +260,12 @@ def main():
                     # YOLO 얼굴 인식 코드
                     # model = YOLO("best_demon_slayer.pt")
                     # model = YOLO("yolo11n.pt")
-                    model = YOLO("demon_slayer_parameter_tuning.pt")
+                    model = YOLO("best_demon_slayer_v8n_parameter_tuning.pt")
                     results = model(rotated_img)
 
+                    class_names = model.names
+
+                    bbox_all_cls_id = []
                     bbox_all_coodinate = []
                     bbox_all_iou = []
                     bbox_all_center_distance = []
@@ -260,6 +290,7 @@ def main():
 
                                 box_coordinate = [x1, y1, x2, y2]
                                 bbox_all_coodinate.append(box_coordinate)
+                                bbox_all_cls_id.append(cls_id)
 
                                 if bbox_previous_coordinate is not None:
                                     iou = computeIoU(box_coordinate, bbox_previous_coordinate)
@@ -272,33 +303,56 @@ def main():
                                     center_distance = computeCenter(box_coordinate, central_coordinate) 
                                     bbox_all_center_distance.append(center_distance)
 
+                            if len(bbox_all_iou) > 0 and len(bbox_all_center_distance) > 0:
+
+                                for i in range(0, len(bbox_all_iou)):
+                                    cost = (1 - bbox_all_iou[i]) + (bbox_all_center_distance[i] / max_distance)
+                                    bbox_all_cost.append(cost)
+                                    # print("cost: ", cost)
+
+                                min_cost = min(bbox_all_cost)
+                                # print("minimum cost: ", min_cost)
+
+                            for i in range(0, len(bbox_all_cost)):
+                                if bbox_all_cost[i] == min_cost:
+                                    idx = i
+                                    # print("idx: ", idx)
+                                    break
+
+                            control_input_x1 = bbox_all_coodinate[idx][0]
+                            control_input_x2 = bbox_all_coodinate[idx][2]
+
+                            cls_id_input = bbox_all_cls_id[idx]
+
+                            # print("cls_id_input: ", cls_id_input)
+                            # print("control_input: ", control_input_x1, control_input_x2)
+
+                            recognized_name = class_names[cls_id_input]
+                            recognized_cls_id = cls_id_input
+
+                            for key, value in recognized_cls_type.items():
+                                if cls_id_input in value:
+                                    recognized_group = key
+                                    break
+
+                            time_gap = current_time - call_information_time
+
+                            if call_information_flag is True:
+                                if time_gap > 30 or start_flag is True:
+                                    print("recognized_name    : ", recognized_name)
+                                    print("recognized_cls_type: ", recognized_group)
+                                    print("recognized_cls_id  : ", f"{recognized_cls_id}")
+                                    call_information_time = time.time()
+                            
+                                    start_flag = False
+                                else:
+                                    print(f"이미 {int(time_gap)}초 전에 정보를 호출했습니다. {int(30 - time_gap)}초 후에 다시 시도해 주세요.")
+                                    call_information_flag = False
+
+                            bbox_previous_coordinate = bbox_all_coodinate[idx]
+
                             if tracking_switch is True:
-
-                                if len(bbox_all_iou) > 0 and len(bbox_all_center_distance) > 0:
-
-                                    for i in range(0, len(bbox_all_iou)):
-                                        cost = (1 - bbox_all_iou[i]) + (bbox_all_center_distance[i] / max_distance)
-                                        bbox_all_cost.append(cost)
-                                        print("cost: ", cost)
-
-                                    min_cost = min(bbox_all_cost)
-                                    print("minimum cost: ", min_cost)
-
-                                for i in range(0, len(bbox_all_cost)):
-                                    if bbox_all_cost[i] == min_cost:
-                                        idx = i
-                                        print("idx: ", idx)
-                                        break
-
-                                control_input_x1 = bbox_all_coodinate[idx][0]
-                                control_input_x2 = bbox_all_coodinate[idx][2]
-
-                                print("control_input: ", control_input_x1, control_input_x2)
-
-                                bbox_previous_coordinate = bbox_all_coodinate[idx]
-
                                 dock_ctrl.update_from_marker(rotated_img, control_input_x1, control_input_x2)
-
                             else:
                                 bbox_previous_coordinate = None
                                 dock_ctrl.stop()
@@ -306,7 +360,7 @@ def main():
                         else:
                             dock_ctrl.stop()
 
-                        print(tracking_switch)
+                        # print(tracking_switch)
 
                     # show_image = results[0].plot()
 
@@ -321,7 +375,7 @@ def main():
                                         (0, 255, 255), 1)
 
                     switch_time = current_time
-                    print(frame_count)
+                    # print(frame_count)
                     frame_count = 0
 
                 else:
@@ -332,8 +386,6 @@ def main():
                                         (0, 255, 255), 1)
 
                 frame_count += 1
-                
-                key_input = cv2.waitKey(1)
 
                 # rectangle_coord_x1 = int(central_coordinate[0] - (screen_height / 4))
                 # rectangle_coord_y1 = int(central_coordinate[1] - (screen_height / 4))
@@ -345,7 +397,11 @@ def main():
                 #                 (rectangle_coord_x2, rectangle_coord_y2),
                 #                 (0, 255, 255), 1)
                 
+
+                # return show_image
                 cv2.imshow("UDP MJPEG", show_image)
+
+                key_input = cv2.waitKey(1)
 
                 if key_input == ord('q') or process_stop_flag is True:
                     break
@@ -355,6 +411,8 @@ def main():
                 elif key_input == ord('e'):
                     print("Tracking deactivated")
                     tracking_switch = False
+                elif key_input == ord("r"):
+                    call_information_flag = True
             
     finally:
         sock.close()
@@ -365,4 +423,4 @@ def main():
         return "yolo terminated"
 
 if __name__ == "__main__":
-    main()
+    main_yolo()
