@@ -1,0 +1,1292 @@
+AI Robot Care
+Smart Nursing Home
+     
+ 
+
+Jeong Gyu-ho
+PM / Server / LLM
+
+Park Soo-hyun
+ROS2 Driving
+
+Park Jae-o
+Path Finding
+
+Shin Dong-jin
+Vision / DL
+
+Jeong Tae-min
+IoT / GUI
+
+Team : R-FRED
+1
+
+Table of Contents
+AI Robot Care System
+
+01  
+Team Introduction
+02    
+Necessity, Status, Positioning & Significance
+03  
+Planning & System Design
+04  
+Key Functional Scenarios
+05  
+Core Technology Stack
+06  
+Prototype Verification & Testbed
+07  
+User Interface (GUI/Dashboard)
+2
+
+01
+
+CHAPTER 01
+ 
+Team Introduction & Roles
+
+3
+
+Team : R-Fred
+Meet the Team: Bridging Technology & Humanity
+
+TEAM LEAD
+
+· Service Planning · ROS2 Emotion/UI
+· LLM Interface · Server & DB Arch.
+
+DRIVING & CONTROL
+
+· ROS2 Navigation · Nav2 Tuning · State Machine
+· Set Construction
+
+PATH FINDING
+
+· A* Implementation · Rectangular Tuning
+· Algorithm Opt. · Simulation-based Environment
+Modeling
+
+VISION AI
+
+· Deep Learning (YOLO) · IbVS / IoU Tracking · Feedback Control · Precision Docking
+
+4
+
+IOT & GUI
+
+· IoT Hardware Config · REST API · GUI
+· System Prompt
+
+02
+
+CHAPTER 02
+ 
+ 
+Background, Necessity & Objectives
+
+5
+
+Why Now?  
+ 
+ 2025  (65  20%) .     .
+Source: Statistics Korea (kostat.go.kr)
+  
+ 29.1%.  ,  ,    .
+Source: Ministry of Health & Welfare (mohw.go.kr)
+
+  
+  ,    .    .
+6
+
+ 
+
+Global
+$4.4B (2024) 2040 4  . (Fortune Business Insights)
+
+Competitors
+(), () :  ( 
+)
+
+Korea (Gap)
+Missing Link       .    .
+
+ " " " "      .
+
+7
+
+Concept:  
+  ,    .
+
+ (3D )
+·   ( ) ·  () ·   ·  
+
+ ()
+·    ·    ·   ·  
+
+8
+
+03
+
+CHAPTER 03
+ 
+System Planning & Architecture Design
+
+9
+
+ 
+       .
+
+
+Planning Phase
+      
+
+
+System Design
+  (SR)       & GUI
+
+
+Development
+ &   ROS2 Nodes & Topics Deep Learning Models IoT Integration
+
+
+Testing & Validation
+      
+
+10
+
+System Architecture
+
+Service
+
+OpenAI GPT (LLM), STT/TTS, Web Dashboard
+
+Perception
+
+YOLO v8 (/), IoU Tracking,  
+
+Control
+
+ROS2 Jazzy, Nav2, A* ( ), State Machine
+
+Hardware
+
+mobility, Camera, IoT (ESP32), Postgres + TimescaleDB
+
+GUI
+
+HTTP/TCP
+
+Server
+
+Main Server
+Central Service
+
+GUI
+
+HTTP/TCP
+
+AI Server
+
+HTTP
+
+LLM Service
+
+WebRTC
+Streaming Service
+
+TCP
+IoT
+Living Room Controller
+
+ROS
+
+HTTP
+
+TCP
+
+Robot
+Robot Controller Voice Processor
+
+UDP
+Camera
+
+Data Flow
+
+11
+
+From Needs to Specs
+
+      .
+
+User Requirement (UR)
+
+System Req (SR)
+
+Tech Solution
+
+UR-1: "       ."
+
+SR-04:   Nav2 Waypoint + Payload Mgmt
+
+UR-9: "     ."
+
+SR-15:  
+
+State Machine + YOLO Detection
+
+UR-12: "       ."
+
+SR-12:  
+
+Zone Check + Voice Alert
+
+UR-4: "  ,        ." SR-09:   LLM Context + Emotion Log
+
+12
+
+04
+
+CHAPTER 04
+ 
+Key Functional Scenarios & Flows
+
+13
+
+Feature 1:  
+
+Kitchen Load Trays
+
+Kitchen Load Trays
+
+Table Precision Docking
+
+Dish Return Auto Collection
+
+Service Trigger :
+·   " "
+Key Tech:
+· State Machine: Static Map    · A* Tuning:     90    . · Cooperation:   ,    .
+14
+
+Feature 1: Meal & Dish Service
+
+Kitchen Load Trays
+
+Kitchen Load Trays
+
+Table Precision Docking
+
+Dish Return Auto Collection
+
+Service Trigger :
+·   " "
+Key Tech:
+· State Machine: Static Map    · A* Tuning:     90    . · Cooperation:   ,    .
+15
+
+Feature 1: Meal & Dish Service
+
+Kitchen Load Trays
+
+Kitchen Load Trays
+
+Table Precision Docking
+
+Dish Return Auto Collection
+
+Service Trigger :
+·   " "
+Key Tech:
+· State Machine: Static Map    · A* Tuning:     90    . · Cooperation:   ,    .
+16
+
+Feature 1: Meal & Dish Service
+
+Kitchen Load Trays
+
+Kitchen Load Trays
+
+Table Precision Docking
+
+Dish Return Auto Collection
+
+Service Trigger :
+·   " "
+Key Tech:
+· State Machine: Static Map    · A* Tuning:     90    . · Cooperation:   ,    .
+17
+
+Feature 2: Night Patrol & Safety
+
+Service Trigger :
+  ""
+
+"   "
+
+ 
+
+YOLO    + LSTM      
+
+
+
+YOLO    +     
+
+
+
+     . (  )
+
+Ref: Wandering Risk Study (ncbi.nlm.nih.gov)
+
+18
+
+Feature 2: Night Patrol & Safety
+
+Service Trigger :
+  ""
+
+"   "
+
+ 
+
+YOLO    + LSTM      
+
+
+
+YOLO    +     
+
+
+
+     . (  )
+
+Ref: Wandering Risk Study (ncbi.nlm.nih.gov)
+
+19
+
+Feature 2: Night Patrol & Safety
+
+Service Trigger :
+  ""
+
+"   "
+
+ 
+
+YOLO    + LSTM      
+
+
+
+YOLO    +     
+
+
+
+     . (  )
+
+Ref: Wandering Risk Study (ncbi.nlm.nih.gov)
+
+20
+
+Feature 2: Night Patrol & Safety
+
+Service Trigger :
+  ""
+
+"   "
+
+ 
+
+YOLO    + LSTM      
+
+
+
+YOLO    +     
+
+
+
+     . (  )
+
+Ref: Wandering Risk Study (ncbi.nlm.nih.gov)
+
+21
+
+Feature 3: Integrated Care
+
+Service Trigger :  
+
+
+LLM    .
+
+
+   
+
+
+   .
+
+ 
+   .
+
+22
+
+Service Scenario Flow
+         .
+
+1. 
+User Request (Start Point)
+  (Bringing Patient)
+Start: Target:
+Return:
+
+2.  
+Execute Task (Pickup / Retrieve)
+
+3. 
+Return & Complete (End Point)
+
+ (Errands)
+Start: Target: Return:
+23
+
+Feature 3: Integrated Care
+
+Service Trigger :  
+
+
+LLM    .
+
+
+   
+
+
+   .
+
+ 
+   .
+
+24
+
+Service Scenario Flow: Mobile Dialogue
+        .
+
+1.  
+(Voice Trigger)
+
+2.  
+LLM Proactive
+
+3.  
+Following & Talking
+Target Tracking
+
+4.  
+
+5.   
+Happy
+
+Core Value: ""
+  ,   "  "          .
+25
+
+Feature 3: Integrated Care
+
+Service Trigger :  
+
+
+LLM    .
+
+
+   
+
+
+   .
+
+ 
+   .
+
+26
+
+05
+
+CHAPTER 05
+ 
+Core Technology Stack (ROS2, AI, IoT)
+
+27
+
+Tech:   
+LSTM   
+
+Normal
+   , ,      .
+
+Warning
+      . 0.3 ~ 1.0     .
+
+Fall
+    , 0.5 ~ 1     .
+28
+
+Tech:  
+AI      
+
+01
+Data C· Soolulerccet: iAoI nHub    
+  
+· Volume:  3,000+     
+· Diversity: , ,      
+
+02
+Processing & Labeling
+· Labeling: OpenCV & Google Sheet    
+· Classes: Normal / Warning / Fall (3 Class)
+· Keypoints: MediaPipe/YOLO     
+
+03
+Model O· Aputgimmeinztaattioion:n ,  
+   
+· Structure: YOLO Object Detection + LSTM   
+· Target:      
+
+29
+
+Tech: Performance & Selection
+    
+
+Why Model 4?
+4   , Model 4     Confidence Score   .
+80% Success Rate (Test Scenarios)
+
+0% Critical Failure (Missed Detection)
+
+0.85 F1-Score (Fall Class)
+
+30
+
+Tech: Navigation Logic
+
+A* 90 angle Tuning
+    .      A*      90  .
+
+State Machine
+   .
+
+Preferred: Orthogonal
+
+31
+
+Tech:  A*  
+
+ 
+          A* 
+
+ 
+ A*         
+
+
+      A* 
+
+A*   
+
+ A*  
+
+
+        
+
+  (A*, Theta*, D*, RRT, RRT*)
+
+https://aieros.atlassian.net/wiki/x/H4Ck
+
+Ref: https://sofee.tistory.com/33
+
+32
+
+Tech: State Machine Navigation
+    (RTR)
+Problem
+·  Nav2:       ·      · /     
+Solution: RTR
+· Rotate - Translate - Rotate   ·  (Rectangular)  ·     
+
+RTR Sequence
+(IMU Angle Control)
+(Linear Distance Control)
+(Heading Alignment)
+33
+
+Tech: State Machine Architecture
+  
+
+ manages
+ implements
+
+State Definition
+RotateToGoal      (Heading)
+MoveToGoal     (No steering)
+RotateToFinal   (/) 
+GoalReached       
+34
+
+Tech: Control Logic & Sensors
+IMU  Odometry    
+
+Rotation
+Sensor IMU (Inertial)
+Logic P-Control Loop
+Goal Target Angle Match
+IMU     ,
+  (Error) P  .
+
+Translation
+Sensor Odometry (Encoder) Logic Distance Accumulation Goal Stop at Target Dist
+Odometry     .
+ ($\Delta d$)    .
+
+Target: 0° / Current: 60°
+
+Current Dist \ Target Dist 35
+
+Tech: Control Logic & Sensors
+ : P-Control 
+Core Logic
+Proportional Control
+  (Error)    .      /,     .
+
+Large Error Small Error
+
+Applied Successfully
+
+High Speed Low Speed
+
+Engineering Decision
+Alternative Solutions
+Integral (I) Excluded Min Speed
+   (Steady-state Error)      , ' (Min Velocity)'      .
+Derivative (D) Excluded Friction
+    D() ,            .
+36
+
+Tech:   
+YOLO BBOX  (P) (D)     .
+
+Detected (Current)
+
+Control Logic
+() d_error( )   .
+
+Camera Feed (Real-time)
+
+Target (Goal)
+
+Why PD Control?
+· Proportional (P):        .
+· Derivative (D):        (Damping),    .
+Result: Sm3o7oth docking at dining tables.
+
+Tech:  PD  
+Precision Wall Following Logic: Why PD + P?
+Angle Error (PD)
+Parallel Alignment (  Targe)t: 0° Error
+
+Why D Control? (Damping)
+ : P       (Oscillation) .  : D    (Damping)  ,    .
+
+Distance Error (P)
+Gap Maintenance (  Targe)t: Dist X
+
+Why Integral (I) Excluded?
+ :          (Divergence)  . :        (Start timing)   .
+38
+
+Tech:   
+
+Perception Pipeline
+
+Why YOLO v8?
+    . YOLO Faster R-CNN          .
+
+Data Pipeline
+            Postgres/TimescaleDB .
+
+39
+
+1. ArUco: Meta-Data & Localization
+     " "  " " .
+Role & Implementation
+· Meta-Info DB Lookup:  ID -> DB  -> /   (: "302: ")
+· Location Augmentation:           . · Rapid Task Execution:    (: "  ")
+Key Value     ID          .
+40
+
+2. Vision Tracking: Model Optimization
+    YOLO  .
+
+Training Strategy
+· Dataset:   ''  . · Augmentation:     , ,  .
+
+Performance Data
+
+Why YOLO v8n?
+ , v8n v11n   1.74ms  ,    .
+
+Metric (Avg) Inference Total Time
+
+YOLO v8n 5.36 ms 7.88 ms
+
+41
+
+YOLO v11n 7.10 ms 9.62 ms
+
+3. Precision Control: IoU Logic
+Union Intersection     ID .
+
+Area of Intersection
+IoU =
+Area of Union
+
+Tracking Algorithm
+1. Candidate Matching:  BBOX    BBOX .
+2. Scoring: IoU  +     . 3. Filtering: IoU     /
+(ID  ).
+
+Stability
+         .
+
+42
+
+4. Close-range Driving: Wall Following
+LiDAR   PD     .
+
+Implementation Process
+· Step 1: Clustering (DBSCAN)  LiDAR     . · Step 2: Extraction       . · Step 3: Control Evolution
+ v1: P-only (Oscillated)  v2: Full PD (Complex tuning)  v3 (Final): Hybrid Control
+
+Hybrid PD Logic
+Final Logic (v3):
+Angle Error PD Control (For stability)
+
+43
+
+Distance Error P Control (For positioning)
+
+4. Close-range Driving: Wall Following
+LiDAR   PD     .
+Implementation Process
+· Step 1: Clustering (DBSCAN)  LiDAR     . · Step 2: Extraction       . · Step 3: Control Evolution
+ v1: P-only (Oscillated)  v2: Full PD (Complex tuning)  v3 (Final): Hybrid Control
+44
+
+Tech: LLM Physical AI Integration
+          .
+
+Voice Interface
+Wake-up Word (Efficiency) STT Pipeline
+
+LLM (The FunctioBnrCaailnl D)ecision
+Mapping Natural Language to Specific Tool Arguments
+
+JSON CMD
+
+Physical & SW Tools
+
+Robot Control
+
+gRPC-web
+
+Backend Svc
+
+REST API
+
+GUI Sync
+
+REST/WS
+
+Tool Provisioning
+LLM   (HW)  (SW)  (Function)  ,    .
+
+Hybrid Protocol
+ROS2 Robot:    gRPC-web . Software:     REST API  .
+
+User Experience
+Wake-up Word:    . GUI Sync:        .
+45
+
+Conversational Interface
+   
+Wake-Up Keyword
+
+Live Voice Conversation
+
+46
+
+Tech: System Prompt Engineering
+    ,  ,   .
+
+# SYSTEM PROMPT (v1.2)
+
+Role: Tone:
+
+# TOOLS (Function Call)
+
+`errand_service(item="water") `
+
+`start_patrol_guide()`
+
+# PSYCHOLOGY "Geriatric Depression Scale (GDS)"
+
+Care Persona  AI      
+ .
+Psychological Analysis
+    /     .
+Task Orchestration        
+  .
+
+47
+
+Tech: IoT Control & RestAPI
+Arduino   LLM   
+
+User
+Voice / Remote
+
+LLM
+Intent Analysis
+
+RestAPI
+FastAPI Proxy
+
+ESP32
+Arduino Server
+
+Smart Device Control
+Dual Interface:    (Remote)  LLM    .
+Door & Power:  (Door)     .
+
+Why
+
+RestAPI?
+
+Structure ESP32 WebServer + ArduinoJson
+
+Selection
+
+MQTT       .  Function Call 
+
+.
+
+Network 2.4GHz Wi-Fi   .
+
+48
+
+06
+
+CHAPTER 06
+ 
+Verification & Testbed Results
+
+49
+
+Prototype Verification
+
+Not Just Simulation
+        .
+Patrol: Delivery: Dialogue:
+50
+
+07
+
+CHAPTER 07
+ 
+GUI Design & Dashboard
+
+51
+
+Tech: Real-Time Video Monitoring GUI
+PyQt + OpenCV       
+Multi-Panel Integrated Control
+PyQt   , ,         .
+Key Features
+   (OpenCV)                 ( )
+52
+
+Dev Log: Troubleshooting Talk R-Fred       
+
+Team R-Fred (5)
+
+Online
+
+"    YOLO ,    ? "
+
+"Nav2   ...   IMU+Odom   ."
+
+"     . Lifecycle 'Active'  !"
+
+"   ...    . "
+
+"SW API  ROS OS ...  REST  gRPC  !"
+
+53
+
+"More Than a Robot, A Partner in Care"
+Robotics can bridge the gap between physical labor and emotional connection.
+54
+
+Thank You for Listening!
+
+Q&A
+ !     .
+
+
+· LLM:  (),   · Interface: DB--LLM--GUI   · ROS: LCD  (/)
+
+
+· ROS:     (RTR ) · Nav:     
+
+
+· DL: ArUco  & YOLO   · Control:      
+
+
+· IoT: API  ESP32 /LED  · GUI: PyQt     
+
+
+· Safety: /   55
+· Monitor:   / 
+
+Appendi x Detailed Specifications & Roadmap
+1. Project Suggestions () 2. Future Roadmap (  ) 3. Technical Specs ( )
+56
+
+02
+
+CHAPTER 02
+ 
+ 
+Background, Necessity & Objectives
+
+57
+
+Global Competitors
+Analysis of Existing Solutions: Focus on Single Purpose
+
+ Japan
+
+ Europe / Global
+
+ USA /  Israel
+
+PAR O EMOTIONAL
+THERAPY
+      .       
+.
+
+tem i TELEPRESENCE & GUIDE
+    .  , ,   .
+
+Elli Q PROACTIVE
+COMPANION
+     .      .
+
+58
+
+Domestic Landscape (Korea)
+A Polarized Market: Emotional Dolls vs. Serving Robots
+
+Missing
+Link
+  '  ' ' / ' 
+.
+
+AI Care Dolls
+ :  (Hyodol)        . :  ,     .
+Logistics Robots
+ : /      .
+:  /   .
+59
+
+Strategic Positioning
+Integrated Care: Bridging Emotion and Function
+High Emotion ( )
+Stationary ( )
+Functional ( )
+
+Integrated Smart Care
+
+Mobile ( )
+
+60
+
+05
+
+CHAPTER 05
+ 
+Core Technology Stack (ROS2, AI, IoT)
+
+61
+
+Tech Selection: Vision & Perception
+Balancing Accuracy and Real-time Processing for Safety
+
+Object Detection
+
+    
+
+YOLO v8 Selected
+     .      Real-time  .
+ ,  
+Faster R-CNN Comparison
+         .
+  ( )
+
+  (Precision) Core Control
+ArUco/YOLO     .     ()       .
+  ,   
+  Logic Used
+IoU (Intersection over Union)     P-Control .         .
+62
+  
+
+Tech Selection: Navigation
+Optimized for Static & Narrow Nursing Home Corridors
+
+Technology
+Nav2 Stack (ROS2 Standard) A* + Rectangular Tuning
+State Machine
+Dijkstra / D* Lite
+
+Pros & Logic
+ROS2 ,  SLAM/Nav  . /  .
+       .   .
+/      .          .
+
+63
+
+Suitability Essential Core Algo Scenario Excluded
+
+Tech Selection: Intelligence (LLM)
+Current Stability vs. Future Reasoning Capability
+
+OpenAI GPT + FC Current
+Function Calling (FC)   .    JSON(  )     PoC  .
+
+Chain of Thought (CoT) Future
+    .    , " "   [     ]     .
+
+ , API 
+
+     
+64
+
+Tech Selection: Infra & Data
+Reliable Communication & Long-term Health Data
+
+TCP / HTTP Protocol
+MQTT  .            .
+
+ESP32 / Arduino Device
+  .  (), ,      / MCU.
+
+TimescaleDB Storage
+  .   ,  ,        .
+
+65
+
+Technical Philosophy
+Why we chose these technologies?
+
+Stability Over Speed
+
+"  "
+     (Static) .   ,       (Stable Tech)    .
+
+66
+
+Feature 1:   
+
+  
+      
+ 360°  
+  (: 50 cm)            
+Ref: https://wiki.ros.org/lidar_tracking
+
+   
+     50cm    
+     
+
+     10cm          
+67
+
+Feature 2:    
+
+  
+       
+
+   
+    UI  
+
+Ref: https://github.com/zhm-real/PathPlanning
+
+68
+
+Tech:  A*  
+
+ 
+          A* 
+
+ 
+ A*         
+
+
+      A* 
+
+A*   
+
+ A*  
+
+
+        
+
+  (A*, Theta*, D*, RRT, RRT*)
+
+https://aieros.atlassian.net/wiki/x/H4Ck
+
+Ref: https://sofee.tistory.com/33
+
+69
+
+Dev Log: Close-Range Driving Overcoming Asymmetry in Wall Following Control
+Shin Dong-jin
+Vision & Control Logic
+
+Issue 1: Right Wall Collision
+   ,       ()      .
+Issue 2: The Drift (Divergence)
+    ,    .   ' (Error0)'     (Bias) .
+
+Technology Stack ROS2 Control P-Controller Heuristic Tuning
+
+Solution: Heuristic Offset
+          (Offset)     .    .
+
+3. Technical Specs: Logic & Data
+LLM Control Pipeline
+We use Python to bridge the unstructured voice input with structured ROS2 actions.
+
+Log Schema (TimescaleDB)
+Designed for high-frequency writes and time-series analysis of patient health trends.
+
+Field time event_type value_json robot_id
+
+Type TIMESTAMPTZ VARCHAR JSONB INT
+
+Description Event occurrence FALL, EMOTION, etc. { "confidence": 0.98, "emotion": "sad" } Source Unit ID
+
+71
+
+08
+
+CHAPTER 08
+   Future Roadmap & Expansion Strategy
+
+72
+
+Challenges & Solutions
+
+Challenge
+Narrow, Static Corridors Precise Docking Complex Commands Long-term Data
+
+Technical Solution
+A* Rectangular Tuning for smooth 90° turns. IbVS + ArUco for pixel-perfect alignment. LLM Function Calling for structured control. TimescaleDB for health trend analysis.
+73
+
+1. Project Suggestions & Implications
+
+Practical Feasibility
+Proof of Concept (PoC)
+We demonstrated that a single robot can handle multi-domain tasks (Patrol + Delivery + Care) in a physical nursing home set, proving that automation is ready for field testing.
+Proposal :
+
+Standardized Architecture
+ROS2 Modular Design
+By decoupling the 'Vision Node', 'Control Node', and 'LLM Service', the system allows for easy hardware upgrades (e.g., changing the robot base or camera) without rewriting core logic.
+Proposal :
+
+Care-Centric Innovation
+Beyond Labor Saving
+We shifted the focus from "replacing humans" to "augmenting care". The system's ability to log emotions and prevent falls adds value that human staff alone cannot provide 24/7.
+Proposal :
+
+74
+
+Future Roadmap
+
+MAPF
+Multi-Agent Path Finding for coordinating multiple robots.
+Ref: arXiv:1901.09824
+
+Edge AI
+On-device inference (Orin Nano) for privacy & offline safety.
+
+O&M Platform
+Unified Facility Management integration.
+
+75
+
+Tech Strategy: Evolution Roadmap
+Transitioning from flexible prototyping to domain-specific optimization.
+
+System Prompting
+Speed: Immediate iteration. Flexibility: Easy to modify logic. Limit: Token cost & latency.
+"Best for validating logic"
+
+LLM Fine-Tuning
+Accuracy: Domain-specific knowledge (Medical/Care). Privacy: On-premise SLM (Llama 3). Efficiency: Lower latency.
+"Optimized for real-world deployment"
+76
+
+2.   (Implementation Proposal)
+
+MAPF (Multi-Robot Fleet) Phase 2 Proposal
+ :  (, ,  )         . : Conflict-Based Search (CBS)   3     .
+Edge AI (  )Phase 3 Proposal
+ :               . : YOLO,    **NVIDIA Jetson Orin Nano**    .       .
+
+ O&M  
+     Step 3:  
+HVAC, ,  IoT  
+Step 2:    (Fleet Management)
+ ,  ,   
+Step 1:   (Initial  Prototype)  
+77
+
+LLM: Chain of Thought (CoT)
+
+User Voice
+"I feel dizzy, call the nurse."
+
+LLM Reasoning
+1. Keyword: "Dizzy" -> Emergency. 2. Action: Call Nurse. 3. Secondary: Move to Station.
+
+Function Call
+
+We use OpenAI Function Calling for stable JSON output, planning to migrate to on-premise LLM with CoT later.
+
+78
+
+09
+
+CHAPTER 09
+ 
+References & Citations
+
+79
+
+Image Sources
+https://hackster.imgix.net/uploads/attachments/1664737/1215_1__aFF2jg3Zi0.gif?auto=format%2Ccompress&gifq=35&w=900&h=675&fit=min&fm=jpg
+Source: www.hackster.io
+https://yolov8.org/wp-content/uploads/2024/01/How-Does-YOLOv8-Work-2-1024x536.webp
+Source: yolov8.org
+https://b2633864.smushcdn.com/2633864/wp-content/uploads/2016/09/iou_equation.png?lossy=2&strip=1&webp=1
+Source: pyimagesearch.com
+https://www.mdpi.com/sensors/sensors-23-02534/article_deploy/html/images/sensors-23-02534-g001-550.jpg
+Source: www.mdpi.com
+80
+
+
